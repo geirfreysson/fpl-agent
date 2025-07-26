@@ -71,3 +71,6 @@ ai-docs/
 
 # Lock files (optional - some prefer to include them)
 package-lock.json
+
+# FPL data
+fpl_data/fpl_data/*
