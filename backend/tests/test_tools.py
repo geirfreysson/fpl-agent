@@ -2,7 +2,7 @@ import pytest
 import os
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from tools import get_easiest_fixtures, get_players_by_price_range, search_players
+from tools import get_easiest_fixtures, get_players_by_price_range, search_players, get_player_form
 
 
 def test_get_easiest_fixtures_with_real_data():
@@ -456,6 +456,180 @@ def test_search_players_output_format():
             # Check ID part
             id_part = parts[-1]
             assert id_part.startswith("(ID:") and id_part.endswith(")")
+        
+    finally:
+        os.chdir(original_dir)
+
+
+def test_get_player_form_single_player():
+    """Test get_player_form with a single player by name"""
+    
+    original_dir = os.getcwd()
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(project_root)
+    
+    try:
+        result = get_player_form('Salah')
+        
+        assert isinstance(result, str)
+        assert not result.startswith("Error getting player form:")
+        assert "Player Form Analysis (1 players):" in result
+        assert "M.Salah" in result or "Salah" in result
+        assert "MID" in result or "FWD" in result  # Position should be included
+        assert "Liverpool" in result  # Team should be included
+        assert "£" in result  # Price should be included
+        assert "Recent Form" in result
+        assert "Season Average" in result
+        assert "Total Season Points" in result
+        
+    finally:
+        os.chdir(original_dir)
+
+
+def test_get_player_form_multiple_players():
+    """Test get_player_form with multiple players"""
+    
+    original_dir = os.getcwd()
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(project_root)
+    
+    try:
+        result = get_player_form('Salah, Palmer')
+        
+        assert isinstance(result, str)
+        assert "Player Form Analysis (2 players):" in result
+        assert "Salah" in result
+        assert "Palmer" in result
+        
+        # Should have two player sections
+        lines = result.split('\n')
+        player_headers = [line for line in lines if line.startswith('🔍')]
+        assert len(player_headers) == 2
+        
+    finally:
+        os.chdir(original_dir)
+
+
+def test_get_player_form_by_id():
+    """Test get_player_form with player ID"""
+    
+    original_dir = os.getcwd()
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(project_root)
+    
+    try:
+        # Use player ID 381 (should be Salah based on earlier tests)
+        result = get_player_form('381')
+        
+        assert isinstance(result, str)
+        assert "Player Form Analysis (1 players):" in result
+        assert not result.startswith("Error getting player form:")
+        
+        # Should contain standard form metrics
+        assert "Recent Form" in result
+        assert "Season Average" in result
+        assert "Total Season Points" in result
+        assert "Last Gameweek" in result
+        assert "Minutes Played" in result
+        
+    finally:
+        os.chdir(original_dir)
+
+
+def test_get_player_form_detailed():
+    """Test get_player_form with detailed historical analysis"""
+    
+    original_dir = os.getcwd()
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(project_root)
+    
+    try:
+        result = get_player_form('381', detailed=True)
+        
+        assert isinstance(result, str)
+        assert "Historical Performance" in result
+        assert not result.startswith("Error getting player form:")
+        
+        # Should contain season data
+        lines = result.split('\n')
+        historical_lines = [line for line in lines if '/' in line and 'pts' in line]
+        assert len(historical_lines) > 0  # Should have at least some historical data
+        
+    finally:
+        os.chdir(original_dir)
+
+
+def test_get_player_form_not_found():
+    """Test get_player_form with non-existent player"""
+    
+    original_dir = os.getcwd()
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(project_root)
+    
+    try:
+        result = get_player_form('NonExistentPlayer123')
+        
+        assert isinstance(result, str)
+        assert "No players found matching:" in result
+        assert "NonExistentPlayer123" in result
+        
+    finally:
+        os.chdir(original_dir)
+
+
+def test_get_player_form_mixed_found_not_found():
+    """Test get_player_form with mix of found and not found players"""
+    
+    original_dir = os.getcwd()
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(project_root)
+    
+    try:
+        result = get_player_form('Salah, NonExistentPlayer, Palmer')
+        
+        assert isinstance(result, str)
+        assert "Player Form Analysis" in result
+        assert "Salah" in result
+        assert "Palmer" in result
+        assert "❌ 'NonExistentPlayer' - Player not found" in result
+        
+    finally:
+        os.chdir(original_dir)
+
+
+def test_get_player_form_output_format():
+    """Test get_player_form output format consistency"""
+    
+    original_dir = os.getcwd()
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(project_root)
+    
+    try:
+        result = get_player_form('Salah')
+        
+        lines = result.split('\n')
+        
+        # Check header format
+        assert lines[0].startswith("Player Form Analysis")
+        assert "players):" in lines[0]
+        assert lines[1] == ""  # Empty line after header
+        
+        # Find player header line
+        player_header = None
+        for line in lines:
+            if line.startswith('🔍'):
+                player_header = line
+                break
+        
+        assert player_header is not None
+        assert '(' in player_header and ')' in player_header  # Position
+        assert ' - ' in player_header  # Team separator
+        assert '£' in player_header and 'm' in player_header  # Price
+        
+        # Check that form metrics are present
+        form_metrics = ['Recent Form', 'Season Average', 'Total Season Points', 'Last Gameweek', 'Minutes Played']
+        for metric in form_metrics:
+            assert any(metric in line for line in lines), f"Missing metric: {metric}"
         
     finally:
         os.chdir(original_dir)

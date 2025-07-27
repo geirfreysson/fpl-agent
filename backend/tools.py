@@ -318,3 +318,191 @@ def search_players(criteria: str, limit: int = 10) -> str:
         
     except Exception as e:
         return f"Error searching players: {str(e)}"
+
+@tool
+def get_player_form(players: str, detailed: bool = False) -> str:
+    """
+    Get form analysis for one or more players based on recent performance.
+    
+    Args:
+        players: Comma-separated player IDs or names (e.g., "381, Palmer, Haaland")
+        detailed: Include historical season comparison (default: False)
+    
+    Returns:
+        String with player form analysis including recent form and season performance
+    """
+    try:
+        # Get the project root directory
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(current_dir)
+        
+        # Construct absolute paths to data files
+        elements_path = os.path.join(project_root, 'fpl_data', 'fpl_data', 'elements.parquet')
+        teams_path = os.path.join(project_root, 'fpl_data', 'fpl_data', 'teams.json')
+        history_path = os.path.join(project_root, 'fpl_data', 'fpl_data', 'player_history_past.parquet')
+        current_history_path = os.path.join(project_root, 'fpl_data', 'fpl_data', 'player_history.parquet')
+        
+        # Load player data
+        players_df = pd.read_parquet(
+            elements_path,
+            columns=['id', 'web_name', 'first_name', 'second_name', 'team', 'element_type', 
+                    'now_cost', 'form', 'points_per_game', 'total_points', 'event_points', 'minutes']
+        )
+        
+        # Load teams data
+        with open(teams_path, 'r') as f:
+            teams_data = json.load(f)
+        team_lookup = {team['id']: team['name'] for team in teams_data}
+        
+        # Add team names and positions
+        players_df['team_name'] = players_df['team'].map(team_lookup)
+        position_lookup = {1: 'GK', 2: 'DEF', 3: 'MID', 4: 'FWD'}
+        players_df['position'] = players_df['element_type'].map(position_lookup)
+        
+        # Parse input players (could be IDs or names)
+        player_inputs = [p.strip() for p in players.split(',')]
+        found_players = []
+        
+        for player_input in player_inputs:
+            player_input = player_input.strip()
+            if not player_input:
+                continue
+                
+            # Try to find by ID first
+            if player_input.isdigit():
+                player_id = int(player_input)
+                player_row = players_df[players_df['id'] == player_id]
+            else:
+                # Search by name (web_name, first_name, or second_name)
+                player_row = players_df[
+                    players_df['web_name'].str.contains(player_input, case=False, na=False) |
+                    players_df['first_name'].str.contains(player_input, case=False, na=False) |
+                    players_df['second_name'].str.contains(player_input, case=False, na=False)
+                ]
+            
+            if not player_row.empty:
+                # Take the first match if multiple found
+                found_players.append(player_row.iloc[0])
+            else:
+                found_players.append(None)  # Player not found
+        
+        if not any(p is not None for p in found_players):
+            return f"No players found matching: {players}"
+        
+        # Load historical data if detailed analysis requested
+        history_df = None
+        if detailed:
+            history_df = pd.read_parquet(
+                history_path,
+                columns=['player_id', 'season_name', 'total_points', 'minutes']
+            )
+        
+        # Format results
+        result_lines = []
+        result_lines.append(f"Player Form Analysis ({len([p for p in found_players if p is not None])} players):")
+        result_lines.append("")
+        
+        for i, (player_input, player_data) in enumerate(zip(player_inputs, found_players)):
+            if player_data is None:
+                result_lines.append(f"❌ '{player_input}' - Player not found")
+                continue
+            
+            # Convert string values to numeric
+            form = pd.to_numeric(player_data['form'], errors='coerce')
+            ppg = pd.to_numeric(player_data['points_per_game'], errors='coerce')
+            total_points = player_data['total_points']
+            event_points = player_data['event_points']
+            minutes = player_data['minutes']
+            price = player_data['now_cost'] / 10
+            
+            # Player header
+            result_lines.append(f"🔍 {player_data['web_name']} ({player_data['position']}) - {player_data['team_name']} (£{price:.1f}m)")
+            
+            # Calculate 30-day form if current season data is available
+            thirty_day_form = None
+            try:
+                if os.path.exists(current_history_path):
+                    current_history_df = pd.read_parquet(current_history_path)
+                    player_current_history = current_history_df[current_history_df['player_id'] == player_data['id']]
+                    
+                    if not player_current_history.empty:
+                        # Sort by round (gameweek) to get most recent games
+                        player_current_history = player_current_history.sort_values('round', ascending=False)
+                        
+                        # For 30-day form, we'll approximate by taking last few gameweeks
+                        # Since gameweeks are roughly weekly, ~4 weeks = ~4 gameweeks
+                        recent_games = player_current_history.head(4)  # Last 4 gameweeks as 30-day approximation
+                        
+                        if len(recent_games) > 0:
+                            total_points = recent_games['total_points'].sum()
+                            thirty_day_form = total_points / len(recent_games)
+            except:
+                pass  # Fall back to existing form calculation
+            
+            # Display form analysis
+            if thirty_day_form is not None:
+                if thirty_day_form >= 6:
+                    form_emoji = "🔥"
+                    form_desc = "Excellent"
+                elif thirty_day_form >= 4:
+                    form_emoji = "⭐"
+                    form_desc = "Good"
+                elif thirty_day_form >= 2:
+                    form_emoji = "📈"
+                    form_desc = "Average"
+                else:
+                    form_emoji = "📉"
+                    form_desc = "Poor"
+                
+                result_lines.append(f"   30-Day Form: {form_emoji} {thirty_day_form:.1f} points/game ({form_desc})")
+            elif pd.notna(form) and form > 0:
+                # Fall back to 5-game form if available
+                if form >= 6:
+                    form_emoji = "🔥"
+                    form_desc = "Excellent"
+                elif form >= 4:
+                    form_emoji = "⭐"
+                    form_desc = "Good"
+                elif form >= 2:
+                    form_emoji = "📈"
+                    form_desc = "Average"
+                else:
+                    form_emoji = "📉"
+                    form_desc = "Poor"
+                
+                result_lines.append(f"   Recent Form (5 games): {form_emoji} {form:.1f} points/game ({form_desc})")
+            else:
+                result_lines.append(f"   Recent Form: ❓ No recent games or data unavailable")
+            
+            # Season performance
+            if pd.notna(ppg) and ppg > 0:
+                result_lines.append(f"   Season Average: 📊 {ppg:.1f} points/game")
+            else:
+                result_lines.append(f"   Season Average: 📊 {total_points} total points")
+            
+            result_lines.append(f"   Total Season Points: 🎯 {total_points} points")
+            result_lines.append(f"   Last Gameweek: 🎲 {event_points} points")
+            result_lines.append(f"   Minutes Played: ⏱️ {minutes} minutes")
+            
+            # Historical comparison if detailed
+            if detailed and history_df is not None:
+                player_history = history_df[history_df['player_id'] == player_data['id']]
+                if not player_history.empty:
+                    # Get last 3 seasons for context
+                    recent_seasons = player_history.sort_values('season_name', ascending=False).head(3)
+                    
+                    result_lines.append(f"   📈 Historical Performance:")
+                    for _, season in recent_seasons.iterrows():
+                        season_ppg = season['total_points'] / 38 if season['total_points'] > 0 else 0  # Assume 38 gameweeks
+                        result_lines.append(f"      {season['season_name']}: {season['total_points']} pts ({season_ppg:.1f} ppg)")
+                else:
+                    result_lines.append(f"   📈 Historical Performance: No previous season data")
+            
+            # Add separator between players (except for last player)
+            if i < len(found_players) - 1:
+                result_lines.append("")
+        
+        return "\n".join(result_lines)
+        
+    except Exception as e:
+        return f"Error getting player form: {str(e)}"

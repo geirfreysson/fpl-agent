@@ -1,7 +1,7 @@
 from smolagents import ToolCallingAgent, LiteLLMModel
 from smolagents.memory import TaskStep, ActionStep, SystemPromptStep, Timing
 from smolagents.models import ChatMessage, MessageRole
-from tools import get_weather, get_easiest_fixtures, get_players_by_price_range, search_players
+from tools import get_weather, get_easiest_fixtures, get_players_by_price_range, search_players, get_player_form
 import os
 from typing import List, Dict, Any
 import time
@@ -97,7 +97,7 @@ def create_agent(conversation_history: List[Dict[str, Any]] = None):
     )
     
     agent = ToolCallingAgent(
-        tools=[get_weather, get_easiest_fixtures, get_players_by_price_range, search_players],
+        tools=[get_weather, get_easiest_fixtures, get_players_by_price_range, search_players, get_player_form],
         model=model,
         stream_outputs=True  # Enable streaming to get ToolCall/ToolOutput events
     )
