@@ -506,3 +506,98 @@ def get_player_form(players: str, detailed: bool = False) -> str:
         
     except Exception as e:
         return f"Error getting player form: {str(e)}"
+
+def get_player_photos(player_names, size="large"):
+    """
+    Get photo URLs for a list of player names.
+    
+    Args:
+        player_names: List of player names or single player name string
+        size: Photo size - "large" (250x250) or "small" (110x140)
+    
+    Returns:
+        List of dictionaries with player name and photo URL
+    """
+    try:
+        # Get the project root directory
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(current_dir)
+        
+        # Construct absolute path to data file
+        elements_path = os.path.join(project_root, 'fpl_data', 'fpl_data', 'elements.parquet')
+        
+        # Load player data with needed columns
+        players_df = pd.read_parquet(
+            elements_path,
+            columns=['id', 'web_name', 'first_name', 'second_name', 'code', 'photo']
+        )
+        
+        # Handle single string input
+        if isinstance(player_names, str):
+            player_names = [player_names]
+        
+        # Set photo size URL pattern
+        if size == "small":
+            url_pattern = "https://resources.premierleague.com/premierleague/photos/players/110x140/p{}.jpg"
+        else:  # default to large
+            url_pattern = "https://resources.premierleague.com/premierleague/photos/players/250x250/p{}.jpg"
+        
+        results = []
+        
+        for player_name in player_names:
+            player_name = player_name.strip()
+            if not player_name:
+                continue
+            
+            # Search for player by name (web_name, first_name, or second_name)
+            player_row = players_df[
+                players_df['web_name'].str.contains(player_name, case=False, na=False) |
+                players_df['first_name'].str.contains(player_name, case=False, na=False) |
+                players_df['second_name'].str.contains(player_name, case=False, na=False)
+            ]
+            
+            if not player_row.empty:
+                # Take the first match if multiple found
+                player = player_row.iloc[0]
+                
+                # Extract code from photo filename (remove .jpg extension)
+                photo_code = player['code']
+                
+                # Construct photo URL
+                photo_url = url_pattern.format(photo_code)
+                
+                results.append({
+                    'player_name': player['web_name'],
+                    'full_name': f"{player['first_name']} {player['second_name']}",
+                    'player_id': player['id'],
+                    'photo_url': photo_url,
+                    'found': True
+                })
+            else:
+                # Player not found
+                results.append({
+                    'player_name': player_name,
+                    'full_name': None,
+                    'player_id': None,
+                    'photo_url': None,
+                    'found': False
+                })
+        
+        return results
+        
+    except Exception as e:
+        # Return error information for each requested player
+        if isinstance(player_names, str):
+            player_names = [player_names]
+        
+        return [
+            {
+                'player_name': name,
+                'full_name': None,
+                'player_id': None,
+                'photo_url': None,
+                'found': False,
+                'error': str(e)
+            }
+            for name in player_names
+        ]

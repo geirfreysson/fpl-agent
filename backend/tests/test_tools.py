@@ -2,7 +2,7 @@ import pytest
 import os
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from tools import get_easiest_fixtures, get_players_by_price_range, search_players, get_player_form
+from tools import get_easiest_fixtures, get_players_by_price_range, search_players, get_player_form, get_player_photos
 
 
 def test_get_easiest_fixtures_with_real_data():
@@ -630,6 +630,160 @@ def test_get_player_form_output_format():
         form_metrics = ['Recent Form', 'Season Average', 'Total Season Points', 'Last Gameweek', 'Minutes Played']
         for metric in form_metrics:
             assert any(metric in line for line in lines), f"Missing metric: {metric}"
+        
+    finally:
+        os.chdir(original_dir)
+
+
+def test_get_player_photos_single_player():
+    """Test get_player_photos with a single player"""
+    
+    original_dir = os.getcwd()
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(project_root)
+    
+    try:
+        result = get_player_photos('Salah')
+        
+        assert isinstance(result, list)
+        assert len(result) == 1
+        
+        player_data = result[0]
+        assert player_data['found'] == True
+        assert 'Salah' in player_data['player_name']
+        assert player_data['photo_url'] is not None
+        assert 'resources.premierleague.com' in player_data['photo_url']
+        assert '250x250' in player_data['photo_url']  # Default large size
+        assert player_data['photo_url'].endswith('.jpg')
+        assert player_data['player_id'] is not None
+        assert player_data['full_name'] is not None
+        
+    finally:
+        os.chdir(original_dir)
+
+
+def test_get_player_photos_multiple_players():
+    """Test get_player_photos with multiple players"""
+    
+    original_dir = os.getcwd()
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(project_root)
+    
+    try:
+        result = get_player_photos(['Salah', 'Palmer', 'Haaland'])
+        
+        assert isinstance(result, list)
+        assert len(result) == 3
+        
+        # Check that all players were found
+        found_count = sum(1 for player in result if player['found'])
+        assert found_count == 3
+        
+        # Check that all have valid photo URLs
+        for player_data in result:
+            assert player_data['photo_url'] is not None
+            assert 'resources.premierleague.com' in player_data['photo_url']
+            assert player_data['photo_url'].endswith('.jpg')
+            assert player_data['player_id'] is not None
+        
+    finally:
+        os.chdir(original_dir)
+
+
+def test_get_player_photos_small_size():
+    """Test get_player_photos with small photo size"""
+    
+    original_dir = os.getcwd()
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(project_root)
+    
+    try:
+        result = get_player_photos('Salah', size='small')
+        
+        assert isinstance(result, list)
+        assert len(result) == 1
+        
+        player_data = result[0]
+        assert player_data['found'] == True
+        assert '110x140' in player_data['photo_url']  # Small size
+        assert 'resources.premierleague.com' in player_data['photo_url']
+        
+    finally:
+        os.chdir(original_dir)
+
+
+def test_get_player_photos_not_found():
+    """Test get_player_photos with non-existent player"""
+    
+    original_dir = os.getcwd()
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(project_root)
+    
+    try:
+        result = get_player_photos('NonExistentPlayer123')
+        
+        assert isinstance(result, list)
+        assert len(result) == 1
+        
+        player_data = result[0]
+        assert player_data['found'] == False
+        assert player_data['player_name'] == 'NonExistentPlayer123'
+        assert player_data['photo_url'] is None
+        assert player_data['player_id'] is None
+        assert player_data['full_name'] is None
+        
+    finally:
+        os.chdir(original_dir)
+
+
+def test_get_player_photos_mixed_found_not_found():
+    """Test get_player_photos with mix of found and not found players"""
+    
+    original_dir = os.getcwd()
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(project_root)
+    
+    try:
+        result = get_player_photos(['Salah', 'NonExistentPlayer', 'Palmer'])
+        
+        assert isinstance(result, list)
+        assert len(result) == 3
+        
+        # Check first player (should be found)
+        assert result[0]['found'] == True
+        assert 'Salah' in result[0]['player_name']
+        assert result[0]['photo_url'] is not None
+        
+        # Check second player (should not be found)
+        assert result[1]['found'] == False
+        assert result[1]['player_name'] == 'NonExistentPlayer'
+        assert result[1]['photo_url'] is None
+        
+        # Check third player (should be found)
+        assert result[2]['found'] == True
+        assert 'Palmer' in result[2]['player_name']
+        assert result[2]['photo_url'] is not None
+        
+    finally:
+        os.chdir(original_dir)
+
+
+def test_get_player_photos_string_input():
+    """Test get_player_photos with string input instead of list"""
+    
+    original_dir = os.getcwd()
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(project_root)
+    
+    try:
+        # Test that string input is handled correctly
+        result1 = get_player_photos('Salah')
+        result2 = get_player_photos(['Salah'])
+        
+        # Both should return the same result
+        assert len(result1) == len(result2) == 1
+        assert result1[0]['player_name'] == result2[0]['player_name']
+        assert result1[0]['photo_url'] == result2[0]['photo_url']
         
     finally:
         os.chdir(original_dir)
