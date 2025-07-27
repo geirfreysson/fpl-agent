@@ -601,3 +601,185 @@ def get_player_photos(player_names, size="large"):
             }
             for name in player_names
         ]
+
+@tool
+def find_player_replacements(player_name: str, price_tolerance: float = 1.0, max_suggestions: int = 3) -> str:
+    """
+    Find replacement players for a given player based on position, price, and performance.
+    
+    Args:
+        player_name: Name of the player to find replacements for
+        price_tolerance: Maximum price difference in millions (default: 1.0)
+        max_suggestions: Number of replacement suggestions to return (default: 3)
+    
+    Returns:
+        String with player replacement analysis and suggestions
+    """
+    try:
+        # Get the project root directory
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(current_dir)
+        
+        # Construct absolute paths to data files
+        elements_path = os.path.join(project_root, 'fpl_data', 'fpl_data', 'elements.parquet')
+        teams_path = os.path.join(project_root, 'fpl_data', 'fpl_data', 'teams.json')
+        
+        # Load player data with all needed columns for comparison
+        players_df = pd.read_parquet(
+            elements_path,
+            columns=['id', 'web_name', 'first_name', 'second_name', 'team', 'element_type', 
+                    'now_cost', 'form', 'points_per_game', 'total_points', 'expected_goals',
+                    'expected_assists', 'expected_goal_involvements', 'creativity', 'threat',
+                    'influence', 'ict_index', 'minutes', 'goals_scored', 'assists']
+        )
+        
+        # Load teams data
+        with open(teams_path, 'r') as f:
+            teams_data = json.load(f)
+        team_lookup = {team['id']: team['name'] for team in teams_data}
+        
+        # Add team names and positions
+        players_df['team_name'] = players_df['team'].map(team_lookup)
+        position_lookup = {1: 'GK', 2: 'DEF', 3: 'MID', 4: 'FWD'}
+        players_df['position'] = players_df['element_type'].map(position_lookup)
+        players_df['price'] = players_df['now_cost'] / 10  # Convert to millions
+        
+        # Find the target player
+        target_player = players_df[
+            players_df['web_name'].str.contains(player_name, case=False, na=False) |
+            players_df['first_name'].str.contains(player_name, case=False, na=False) |
+            players_df['second_name'].str.contains(player_name, case=False, na=False)
+        ]
+        
+        if target_player.empty:
+            return f"Player '{player_name}' not found. Please check the spelling and try again."
+        
+        # Take the first match if multiple found
+        target = target_player.iloc[0]
+        target_position = target['element_type']
+        target_price = target['price']
+        
+        # Filter potential replacements
+        # Same position, similar price, exclude the target player
+        candidates = players_df[
+            (players_df['element_type'] == target_position) &
+            (players_df['price'] >= target_price - price_tolerance) &
+            (players_df['price'] <= target_price + price_tolerance) &
+            (players_df['id'] != target['id'])  # Exclude the target player
+        ].copy()
+        
+        if candidates.empty:
+            return f"No replacement candidates found for {target['web_name']} in the £{target_price - price_tolerance:.1f}m - £{target_price + price_tolerance:.1f}m price range."
+        
+        # Convert string columns to numeric for comparison
+        numeric_columns = ['form', 'points_per_game', 'expected_goals', 'expected_assists', 
+                          'expected_goal_involvements', 'creativity', 'threat', 'influence', 'ict_index']
+        
+        for col in numeric_columns:
+            candidates[col] = pd.to_numeric(candidates[col], errors='coerce')
+            target[col] = pd.to_numeric(target[col], errors='coerce') if pd.isna(pd.to_numeric(target[col], errors='coerce')) == False else 0
+        
+        # Calculate replacement score for each candidate
+        def calculate_replacement_score(row, target_stats):
+            score = 0
+            
+            # Total points (30% weight)
+            if row['total_points'] > target_stats['total_points']:
+                score += 30
+            elif row['total_points'] >= target_stats['total_points'] * 0.9:
+                score += 20
+            elif row['total_points'] >= target_stats['total_points'] * 0.8:
+                score += 10
+            
+            # Form (25% weight)
+            target_form = target_stats['form'] if pd.notna(target_stats['form']) else 0
+            if pd.notna(row['form']) and row['form'] > target_form:
+                score += 25
+            elif pd.notna(row['form']) and row['form'] >= target_form * 0.9:
+                score += 15
+            elif pd.notna(row['form']) and row['form'] >= target_form * 0.8:
+                score += 5
+            
+            # Points per game (20% weight)
+            target_ppg = target_stats['points_per_game'] if pd.notna(target_stats['points_per_game']) else 0
+            if pd.notna(row['points_per_game']) and row['points_per_game'] > target_ppg:
+                score += 20
+            elif pd.notna(row['points_per_game']) and row['points_per_game'] >= target_ppg * 0.9:
+                score += 15
+            elif pd.notna(row['points_per_game']) and row['points_per_game'] >= target_ppg * 0.8:
+                score += 10
+            
+            # Expected goals/assists (15% weight) - for attacking positions
+            if target_stats['element_type'] in [3, 4]:  # MID, FWD
+                target_xgi = target_stats['expected_goal_involvements'] if pd.notna(target_stats['expected_goal_involvements']) else 0
+                if pd.notna(row['expected_goal_involvements']) and row['expected_goal_involvements'] > target_xgi:
+                    score += 15
+                elif pd.notna(row['expected_goal_involvements']) and row['expected_goal_involvements'] >= target_xgi * 0.9:
+                    score += 10
+            
+            # Value for money (10% weight)
+            target_value = target_stats['total_points'] / target_stats['price'] if target_stats['price'] > 0 else 0
+            candidate_value = row['total_points'] / row['price'] if row['price'] > 0 else 0
+            if candidate_value > target_value:
+                score += 10
+            elif candidate_value >= target_value * 0.9:
+                score += 5
+            
+            return score
+        
+        # Calculate scores for all candidates
+        candidates['replacement_score'] = candidates.apply(
+            lambda row: calculate_replacement_score(row, target), axis=1
+        )
+        
+        # Sort by score and get top suggestions
+        top_candidates = candidates.sort_values('replacement_score', ascending=False).head(max_suggestions)
+        
+        # Format results
+        result_lines = []
+        result_lines.append(f"🔄 Player Replacement Analysis for {target['web_name']}")
+        result_lines.append(f"📍 Position: {target['position']} | 💰 Price: £{target['price']:.1f}m | 🏆 Points: {target['total_points']}")
+        result_lines.append("")
+        
+        if top_candidates.empty:
+            result_lines.append("❌ No suitable replacements found with the current criteria.")
+        else:
+            result_lines.append(f"🎯 Top {len(top_candidates)} Replacement Suggestions:")
+            result_lines.append("")
+            
+            for i, (_, candidate) in enumerate(top_candidates.iterrows(), 1):
+                # Replacement header
+                price_diff = candidate['price'] - target['price']
+                price_symbol = "📈" if price_diff > 0 else "📉" if price_diff < 0 else "➡️"
+                
+                result_lines.append(f"{i}. 🔍 {candidate['web_name']} ({candidate['position']}) - {candidate['team_name']}")
+                result_lines.append(f"   💰 Price: £{candidate['price']:.1f}m {price_symbol} ({price_diff:+.1f}m vs target)")
+                result_lines.append(f"   🎯 Score: {candidate['replacement_score']:.0f}/100")
+                
+                # Performance comparison
+                points_vs_target = candidate['total_points'] - target['total_points']
+                points_symbol = "📈" if points_vs_target > 0 else "📉" if points_vs_target < 0 else "➡️"
+                result_lines.append(f"   🏆 Points: {candidate['total_points']} {points_symbol} ({points_vs_target:+d} vs target)")
+                
+                # Form comparison
+                candidate_form = candidate['form'] if pd.notna(candidate['form']) else 0
+                target_form = target['form'] if pd.notna(target['form']) else 0
+                form_vs_target = candidate_form - target_form
+                form_symbol = "📈" if form_vs_target > 0 else "📉" if form_vs_target < 0 else "➡️"
+                result_lines.append(f"   📊 Form: {candidate_form:.1f} {form_symbol} ({form_vs_target:+.1f} vs target)")
+                
+                # PPG comparison
+                candidate_ppg = candidate['points_per_game'] if pd.notna(candidate['points_per_game']) else 0
+                target_ppg = target['points_per_game'] if pd.notna(target['points_per_game']) else 0
+                ppg_vs_target = candidate_ppg - target_ppg
+                ppg_symbol = "📈" if ppg_vs_target > 0 else "📉" if ppg_vs_target < 0 else "➡️"
+                result_lines.append(f"   ⚡ PPG: {candidate_ppg:.1f} {ppg_symbol} ({ppg_vs_target:+.1f} vs target)")
+                
+                # Add separator between candidates (except for last)
+                if i < len(top_candidates):
+                    result_lines.append("")
+        
+        return "\n".join(result_lines)
+        
+    except Exception as e:
+        return f"Error finding player replacements: {str(e)}"

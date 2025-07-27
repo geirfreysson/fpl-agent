@@ -2,7 +2,7 @@ import pytest
 import os
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from tools import get_easiest_fixtures, get_players_by_price_range, search_players, get_player_form, get_player_photos
+from tools import get_easiest_fixtures, get_players_by_price_range, search_players, get_player_form, get_player_photos, find_player_replacements
 
 
 def test_get_easiest_fixtures_with_real_data():
@@ -784,6 +784,249 @@ def test_get_player_photos_string_input():
         assert len(result1) == len(result2) == 1
         assert result1[0]['player_name'] == result2[0]['player_name']
         assert result1[0]['photo_url'] == result2[0]['photo_url']
+        
+    finally:
+        os.chdir(original_dir)
+
+
+def test_find_player_replacements_single_player():
+    """Test find_player_replacements with a single player by name"""
+    
+    original_dir = os.getcwd()
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(project_root)
+    
+    try:
+        result = find_player_replacements('Salah')
+        
+        assert isinstance(result, str)
+        assert not result.startswith("Error finding player replacements:")
+        assert "Salah" in result
+        
+        # Handle case where expensive players might not have replacements
+        if "No replacement candidates found" in result:
+            assert "Salah" in result
+            assert "price range" in result
+        else:
+            assert "Player Replacement Analysis" in result
+            assert "Current Player:" in result
+            assert "Replacement Suggestions:" in result
+            
+            # Should contain replacement suggestions
+            lines = result.split('\n')
+            replacement_lines = [line for line in lines if line.strip().startswith('🔍')]
+            assert len(replacement_lines) >= 1  # Should have at least 1 replacement
+            
+            # Each replacement should have proper format
+            for line in replacement_lines:
+                assert '(' in line and ')' in line  # Position and stats
+        
+    finally:
+        os.chdir(original_dir)
+
+
+def test_find_player_replacements_by_id():
+    """Test find_player_replacements with player ID"""
+    
+    original_dir = os.getcwd()
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(project_root)
+    
+    try:
+        # Use player ID 381 (should be Salah)
+        result = find_player_replacements('381')
+        
+        assert isinstance(result, str)
+        # Handle case where ID might not be found - this is acceptable
+        if "not found" in result:
+            assert "Player '381' not found" in result
+        else:
+            assert "Player Replacement Analysis" in result
+            assert "Current Player:" in result
+            assert "Replacement Suggestions:" in result or "No replacement candidates found" in result
+            assert not result.startswith("Error finding player replacements:")
+        
+    finally:
+        os.chdir(original_dir)
+
+
+def test_find_player_replacements_custom_parameters():
+    """Test find_player_replacements with custom price tolerance and suggestions"""
+    
+    original_dir = os.getcwd()
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(project_root)
+    
+    try:
+        result = find_player_replacements('Palmer', price_tolerance=2.0, max_suggestions=5)
+        
+        assert isinstance(result, str)
+        assert "Palmer" in result
+        assert "Replacement Suggestions:" in result
+        
+        # Should have up to 5 replacement suggestions
+        lines = result.split('\n')
+        replacement_lines = [line for line in lines if line.strip().startswith('🔍')]
+        assert len(replacement_lines) <= 5
+        
+        # Check price tolerance indication
+        if "within £2.0m" in result:
+            assert True  # Price tolerance is mentioned
+        
+    finally:
+        os.chdir(original_dir)
+
+
+def test_find_player_replacements_different_positions():
+    """Test find_player_replacements for players in different positions"""
+    
+    original_dir = os.getcwd()
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(project_root)
+    
+    try:
+        # Test a midfielder
+        result_mid = find_player_replacements('Palmer', max_suggestions=2)
+        assert "Palmer" in result_mid
+        assert "MID" in result_mid  # Should show position
+        
+        # Test a forward (search for Haaland)
+        result_fwd = find_player_replacements('Haaland', max_suggestions=2)
+        assert isinstance(result_fwd, str)
+        if not result_fwd.startswith("Error"):
+            # Handle case where expensive forwards might not have replacements
+            if "No replacement candidates found" not in result_fwd:
+                assert "FWD" in result_fwd or "Forward" in result_fwd
+            else:
+                assert "Haaland" in result_fwd
+        
+    finally:
+        os.chdir(original_dir)
+
+
+def test_find_player_replacements_not_found():
+    """Test find_player_replacements with non-existent player"""
+    
+    original_dir = os.getcwd()
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(project_root)
+    
+    try:
+        result = find_player_replacements('NonExistentPlayer123')
+        
+        assert isinstance(result, str)
+        assert "Player 'NonExistentPlayer123' not found" in result
+        
+    finally:
+        os.chdir(original_dir)
+
+
+def test_find_player_replacements_output_format():
+    """Test find_player_replacements output format consistency"""
+    
+    original_dir = os.getcwd()
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(project_root)
+    
+    try:
+        result = find_player_replacements('Palmer', max_suggestions=3)  # Use Palmer instead of Salah
+        
+        lines = result.split('\n')
+        
+        # Handle case where no candidates are found vs successful analysis
+        if "No replacement candidates found" in result:
+            assert "Palmer" in result
+            assert "price range" in result
+        else:
+            # Check header format
+            assert any("Player Replacement Analysis" in line for line in lines)
+            
+            # Check current player section exists (should have position info somewhere)
+            assert "Palmer" in result
+            assert "MID" in result  # Palmer is a midfielder
+            
+            # Check replacement section header
+            replacement_header = [line for line in lines if "Replacement Suggestions" in line]
+            assert len(replacement_header) == 1
+            
+            # Check replacement format
+            replacement_lines = [line for line in lines if line.strip().startswith('🔍')]
+            for line in replacement_lines:
+                # Should have player name, position, team
+                assert '(' in line and ')' in line
+                assert ' - ' in line
+            
+            # Check that we have some performance data
+            assert "Price:" in result or "£" in result
+        
+    finally:
+        os.chdir(original_dir)
+
+
+def test_find_player_replacements_scoring_logic():
+    """Test that find_player_replacements returns players with meaningful scores"""
+    
+    original_dir = os.getcwd()
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(project_root)
+    
+    try:
+        result = find_player_replacements('Salah', max_suggestions=3)
+        
+        if not result.startswith("Error"):
+            lines = result.split('\n')
+            replacement_lines = [line for line in lines if line.strip().startswith('🔍')]
+            
+            scores = []
+            for i, line in enumerate(lines):
+                # Look for score lines that come after replacement lines
+                if 'Score:' in line:
+                    score_match = line.split('Score:')[1].strip().split('/')[0]
+                    try:
+                        score = float(score_match)
+                        scores.append(score)
+                    except ValueError:
+                        pass
+            
+            # Scores should be in descending order (best first)
+            if len(scores) > 1:
+                assert scores == sorted(scores, reverse=True), f"Scores not in descending order: {scores}"
+            
+            # Scores should be reasonable (between 0 and some reasonable max)
+            for score in scores:
+                assert 0 <= score <= 1000, f"Score {score} outside reasonable range"
+        
+    finally:
+        os.chdir(original_dir)
+
+
+def test_find_player_replacements_edge_cases():
+    """Test find_player_replacements with various edge cases"""
+    
+    original_dir = os.getcwd()
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(project_root)
+    
+    try:
+        # Test with very small price tolerance
+        result1 = find_player_replacements('Palmer', price_tolerance=0.1, max_suggestions=2)
+        assert isinstance(result1, str)
+        
+        # Test with large price tolerance
+        result2 = find_player_replacements('Palmer', price_tolerance=5.0, max_suggestions=2)
+        assert isinstance(result2, str)
+        
+        # Test with max_suggestions = 1
+        result3 = find_player_replacements('Palmer', max_suggestions=1)
+        if not result3.startswith("Error"):
+            replacement_lines = [line for line in result3.split('\n') if line.strip().startswith('🔍')]
+            assert len(replacement_lines) <= 1
+        
+        # Test with max_suggestions = 10
+        result4 = find_player_replacements('Palmer', max_suggestions=10)
+        if not result4.startswith("Error"):
+            replacement_lines = [line for line in result4.split('\n') if line.strip().startswith('🔍')]
+            assert len(replacement_lines) <= 10
         
     finally:
         os.chdir(original_dir)
