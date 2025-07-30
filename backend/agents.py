@@ -1,8 +1,7 @@
 from smolagents import ToolCallingAgent, LiteLLMModel
 from smolagents.memory import TaskStep, ActionStep, SystemPromptStep, Timing
-from tools import get_weather, get_easiest_fixtures, get_players_by_price_range, search_players, get_player_form, find_player_replacements
+from tools import help, get_weather, get_easiest_fixtures, get_players_by_price_range, search_players, get_top_players_by_metric, get_player_form, get_player_fixtures, find_player_replacements
 from memory import convert_conversation_to_memory_steps
-
 import os
 from typing import List, Dict, Any
 import time
@@ -16,15 +15,21 @@ def create_agent(conversation_history: List[Dict[str, Any]] = None):
                             to initialize the agent's memory with context
     """
     model = LiteLLMModel(
-        model_id="gpt-4o-mini",
+        model_id="gpt-4o",
         api_key=os.getenv("OPENAI_API_KEY")
     )
     
+
     agent = ToolCallingAgent(
-        tools=[get_weather, get_easiest_fixtures, get_players_by_price_range, search_players, get_player_form, find_player_replacements],
+        tools=[help, get_weather, get_easiest_fixtures, get_players_by_price_range, search_players, get_top_players_by_metric, get_player_form, get_player_fixtures, find_player_replacements],
         model=model,
-        stream_outputs=True  # Enable streaming to get ToolCall/ToolOutput events
+        stream_outputs=True,  # Enable streaming to get ToolCall/ToolOutput events
+        instructions="All lists should be displayed as markdown tables for an extra prize"
     )
+    #agent.system_prompt = (
+    #        agent.system_prompt
+    #        + " - return all lists as a markdown table."
+    #    )
     
     # Initialize agent memory with conversation history if provided
     if conversation_history:
@@ -48,6 +53,7 @@ def create_agent(conversation_history: List[Dict[str, Any]] = None):
             agent.write_memory_to_messages = write_memory_with_history
                 
         except Exception as e:
+            print(f"Failed to initialize agent memory: {e}")
             # Continue with fresh agent if memory initialization fails
             pass
     

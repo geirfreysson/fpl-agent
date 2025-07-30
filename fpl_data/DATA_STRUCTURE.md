@@ -84,6 +84,139 @@ fpl_data/
 - `chance_of_playing_next_round` (float): Injury probability (0-100)
 - `news` (str): Latest news/injury updates
 
+### Enhanced Features (Derived Metrics)
+
+The `elements.parquet` file has been enhanced with 28+ additional derived features calculated from the base FPL data. These features provide deeper insights for Fantasy Premier League analysis and are designed to help identify value picks, consistent performers, and players with favorable upcoming fixtures.
+
+#### Value Metrics
+These features help identify players offering the best return on investment:
+
+- **`points_per_million`** (float): Total points divided by price in millions. Higher values indicate better value.
+- **`form_per_million`** (float): Recent form (last 5 games average) divided by price in millions.
+- **`expected_goals_per_million`** (float): Expected goals divided by price in millions. Useful for identifying underpriced attacking threats.
+
+#### Performance Efficiency
+Metrics that measure how effectively players use their playing time:
+
+- **`minutes_per_game`** (float): Average minutes played per game. Values close to 90 indicate "nailed-on" status.
+- **`points_per_minute`** (float): FPL points earned per minute played. Identifies efficient performers.
+- **`goal_involvement_rate`** (float): Percentage of team goals the player was involved in (goals + assists).
+
+#### Expected vs Actual Performance
+These features help assess sustainability and identify over/under-performers:
+
+- **`goals_overperformance`** (float): Actual goals minus expected goals. Positive values may indicate unsustainable performance.
+- **`assists_overperformance`** (float): Actual assists minus expected assists.
+- **`goals_luck_factor`** (float): Ratio of actual to expected goals. Values > 1.2 suggest potential regression.
+- **`assists_luck_factor`** (float): Ratio of actual to expected assists.
+
+#### Consistency & Transfer Metrics
+Features measuring reliability and market sentiment:
+
+- **`form_consistency`** (float): Standard deviation of last 5 gameweek scores (lower = more consistent).
+- **`transfer_momentum`** (int): Net transfers in/out over recent gameweeks.
+- **`ownership_category`** (string): Categorized ownership level ("Low", "Medium", "High", "Template").
+
+#### Position-Specific Features
+Tailored metrics for different positions:
+
+##### Goalkeepers
+- **`save_percentage`** (float): Percentage of shots on target saved.
+- **`clean_sheet_rate`** (float): Percentage of games with clean sheets.
+
+##### Defenders
+- **`clean_sheet_rate`** (float): Percentage of games with clean sheets.
+- **`defensive_value`** (float): Combined metric of defensive stats weighted by price.
+
+##### Midfielders & Forwards
+- **`attacking_threat`** (float): Combined metric of attacking stats (goals, assists, shots, key passes).
+
+#### Fixture Difficulty Analysis
+Forward-looking metrics based on upcoming fixture difficulty:
+
+- **`avg_fixture_difficulty_3`** (float): Average difficulty of next 3 fixtures (1=easiest, 5=hardest).
+- **`avg_fixture_difficulty_5`** (float): Average difficulty of next 5 fixtures.
+- **`avg_fixture_difficulty_10`** (float): Average difficulty of next 10 fixtures.
+- **`home_fixture_difficulty_5`** (float): Average difficulty of next 5 home fixtures.
+- **`away_fixture_difficulty_5`** (float): Average difficulty of next 5 away fixtures.
+
+#### Position Rankings
+Rank within position group (1 = best in position):
+
+- **`points_rank_in_position`** (int): Rank by total points within position.
+- **`value_rank_in_position`** (int): Rank by points per million within position.
+- **`form_rank_in_position`** (int): Rank by recent form within position.
+
+### Enhanced Usage Examples
+
+```python
+# Get all players
+players = pd.read_parquet('elements.parquet')
+
+# Find best value midfielders
+best_value_mids = players[
+    (players['element_type'] == 3) & 
+    (players['minutes'] >= 500)
+].nlargest(10, 'points_per_million')
+
+# Identify consistent performers
+consistent_players = players[
+    (players['form_consistency'] <= 2.0) & 
+    (players['minutes_per_game'] >= 60)
+].nlargest(10, 'total_points')
+
+# Find players with easy upcoming fixtures
+easy_fixtures = players[
+    players['avg_fixture_difficulty_5'] <= 2.5
+].nlargest(10, 'form')
+
+# Spot potential value picks (low ownership, high expected goals)
+value_picks = players[
+    (players['ownership_category'] == 'Low') &
+    (players['expected_goals_per_million'] >= 0.5) &
+    (players['now_cost'] <= 70)  # Under £7.0m
+]
+
+# Find overperforming players (potential sell candidates)
+overperformers = players[
+    (players['goals_luck_factor'] >= 1.5) &
+    (players['total_points'] >= 50)
+].sort_values('goals_overperformance', ascending=False)
+
+# Identify nailed-on defenders with good fixtures
+nailed_defenders = players[
+    (players['element_type'] == 2) &
+    (players['minutes_per_game'] >= 80) &
+    (players['avg_fixture_difficulty_5'] <= 3.0)
+].nlargest(10, 'defensive_value')
+```
+
+### Tool Integration
+
+These enhanced features are fully integrated with the FPL analysis tools:
+
+- **`search_players()`**: All enhanced features available as filter parameters
+- **`get_top_players_by_metric()`**: Rank players by any enhanced metric
+- **`help()`**: Provides tips and example queries using enhanced features
+
+```python
+# Example tool usage
+# Find top 5 value midfielders under £8m
+search_players(
+    position="midfielder",
+    max_price=8.0,
+    min_minutes=300,
+    limit=5
+)
+
+# Get top 10 players by points per million
+get_top_players_by_metric(
+    metric="points_per_million",
+    min_minutes=500,
+    limit=10
+)
+```
+
 ---
 
 ## 2. fixtures.parquet

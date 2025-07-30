@@ -1,7 +1,97 @@
 import pandas as pd
 import json
 import os
+import logging
+import traceback
 from smolagents import tool
+
+@tool
+def help() -> str:
+    """
+    Display helpful tips and example questions for FPL analysis using the enhanced features.
+    
+    Returns:
+        String with comprehensive guide on available features and example queries
+    """
+    help_text = """
+🏆 **FPL AGENT HELP GUIDE** 🏆
+
+With our enhanced data features, you can ask sophisticated FPL questions! Here are some examples:
+
+📊 **VALUE & EFFICIENCY ANALYSIS**
+• "Find midfielders under £7m with high points per million"
+• "Show me the best value defenders with good form per million"
+• "Which forwards have the highest goal involvement rate?"
+• "Find players with high points per minute (rotation-proof picks)"
+
+🎯 **EXPECTED vs ACTUAL PERFORMANCE**
+• "Show me players who are overperforming their expected goals" 
+• "Find midfielders with positive assists overperformance"
+• "Which players have the highest luck factor? (unsustainable performers)"
+• "Show me consistent performers with low overperformance variance"
+
+📈 **FIXTURE DIFFICULTY ANALYSIS**
+• "Find teams with the easiest fixtures over the next 5 games"
+• "Show me players from teams with favorable home fixtures"
+• "Which defenders have easy fixtures and good clean sheet rates?"
+• "Compare fixture difficulty for the next 3 vs 10 gameweeks"
+
+🔄 **TRANSFER & OWNERSHIP TRENDS**
+• "Show me players with high transfer momentum (rising in popularity)"
+• "Find template players (high ownership) who are underperforming"
+• "Which low-ownership gems have good underlying stats?"
+• "Show me players being transferred out despite good metrics"
+
+🏅 **POSITION-SPECIFIC ANALYSIS**
+• **Goalkeepers**: "Find keepers with high save percentage and easy fixtures"
+• **Defenders**: "Show me defenders with high defensive value and attacking threat"
+• **Midfielders**: "Find mids with high attacking threat but low ownership"
+• **Forwards**: "Which forwards have the best goal conversion rates?"
+
+🎖️ **RANKING & COMPARISON**
+• "Show me the top 5 value picks in each position"
+• "Compare players' rank within their position for points vs form"
+• "Find players ranked highly for value but low for ownership"
+• "Which players have improved their position ranking recently?"
+
+💡 **ADVANCED COMBINATION QUERIES**
+• "Find midfielders under £8m with easy fixtures, positive overperformance, and rising transfer momentum"
+• "Show me defenders with top 10 defensive value, good fixture difficulty, and low ownership"
+• "Which forwards have high attacking threat, favorable fixtures, but are being transferred out?"
+• "Find consistent performers (high form consistency) with upcoming easy fixtures"
+
+🔍 **SPECIFIC FEATURE QUERIES**
+• **Form Consistency**: "Show me the most consistent point scorers"
+• **Minutes per Game**: "Find nailed-on starters in each position"
+• **Clean Sheet Rate**: "Which keepers/defenders have the best clean sheet records?"
+• **Save Percentage**: "Find keepers with high save rates for bonus points"
+
+💰 **BUDGET & STRATEGY PLANNING**
+• "Find the best value picks for a £100m budget"
+• "Show me premium players (£10m+) who justify their price"
+• "Which budget options (under £5m) offer the best returns?"
+• "Find players with rising prices but still good value"
+
+📋 **EXAMPLE COMPLEX QUERIES**
+• "I need a midfielder under £7m who has easy fixtures, is gaining transfers, and outperforming expectations"
+• "Show me defenders with top defensive value, good clean sheet rates, and favorable upcoming fixtures"
+• "Find forwards with high attacking threat but low ownership - potential differentials"
+• "Which players have the best combination of form, fixtures, and value?"
+
+💭 **PRO TIPS**
+• Combine multiple metrics for better insights (e.g., value + fixtures + form)
+• Look for players with good underlying stats but low ownership (differentials)
+• Consider fixture difficulty over different time horizons (3, 5, 10 games)
+• Use overperformance metrics to identify sustainable vs lucky players
+• Check transfer momentum to spot emerging trends before they peak
+
+🚀 **GET STARTED**
+Try asking: "Find me 3 midfielders under £8m with good value, easy fixtures, and positive transfer momentum"
+
+Happy FPL managing! 🎯
+"""
+    return help_text
+
 
 @tool
 def get_weather(location: str) -> str:
@@ -186,18 +276,320 @@ def get_players_by_price_range(min_price: float = 4.0, max_price: float = 15.0, 
         return f"Error getting players by price range: {str(e)}"
 
 @tool
-def search_players(criteria: str, limit: int = 10) -> str:
+def search_players(
+    limit: float = 10,
+    sort_by: str = "total_points",
+    ascending: bool = False,
+    # Player Identity
+    player_id: float = None,
+    first_name: str = None,
+    second_name: str = None,
+    web_name: str = None,
+    position: str = None,  # goalkeeper, defender, midfielder, forward
+    
+    # Team Information
+    team: str = None,
+    squad_number: str = None,
+    status: str = None,  # available, injured, etc.
+    
+    # Cost & Ownership
+    min_price: float = None,
+    max_price: float = None,
+    min_cost_change_event: int = None,
+    max_cost_change_event: int = None,
+    min_cost_change_start: int = None,
+    max_cost_change_start: int = None,
+    min_ownership: float = None,
+    max_ownership: float = None,
+    
+    # Performance Stats
+    min_total_points: float = None,
+    max_total_points: float = None,
+    min_event_points: float = None,
+    max_event_points: float = None,
+    min_form: float = None,
+    max_form: float = None,
+    min_points_per_game: float = None,
+    max_points_per_game: float = None,
+    min_minutes: float = None,
+    max_minutes: float = None,
+    min_goals_scored: float = None,
+    max_goals_scored: float = None,
+    min_assists: float = None,
+    max_assists: float = None,
+    min_clean_sheets: float = None,
+    max_clean_sheets: float = None,
+    min_goals_conceded: float = None,
+    max_goals_conceded: float = None,
+    min_saves: float = None,
+    max_saves: float = None,
+    min_yellow_cards: float = None,
+    max_yellow_cards: float = None,
+    min_red_cards: float = None,
+    max_red_cards: float = None,
+    min_bonus: float = None,
+    max_bonus: float = None,
+    min_bps: float = None,
+    max_bps: float = None,
+    
+    # Advanced Metrics
+    min_influence: float = None,
+    max_influence: float = None,
+    min_creativity: float = None,
+    max_creativity: float = None,
+    min_threat: float = None,
+    max_threat: float = None,
+    min_ict_index: float = None,
+    max_ict_index: float = None,
+    min_expected_goals: float = None,
+    max_expected_goals: float = None,
+    min_expected_assists: float = None,
+    max_expected_assists: float = None,
+    min_expected_goal_involvements: float = None,
+    max_expected_goal_involvements: float = None,
+    min_expected_goals_conceded: float = None,
+    max_expected_goals_conceded: float = None,
+    
+    # === NEW ENHANCED FEATURES ===
+    # Value Metrics
+    min_points_per_million: float = None,
+    max_points_per_million: float = None,
+    min_form_per_million: float = None,
+    max_form_per_million: float = None,
+    min_expected_goals_per_million: float = None,
+    max_expected_goals_per_million: float = None,
+    
+    # Performance Efficiency
+    min_minutes_per_game: float = None,
+    max_minutes_per_game: float = None,
+    min_points_per_minute: float = None,
+    max_points_per_minute: float = None,
+    min_goal_involvement_rate: float = None,
+    max_goal_involvement_rate: float = None,
+    
+    # Expected vs Actual Performance
+    min_goals_overperformance: float = None,
+    max_goals_overperformance: float = None,
+    min_assists_overperformance: float = None,
+    max_assists_overperformance: float = None,
+    min_goals_luck_factor: float = None,
+    max_goals_luck_factor: float = None,
+    min_assists_luck_factor: float = None,
+    max_assists_luck_factor: float = None,
+    
+    # Consistency & Transfer Metrics
+    min_form_consistency: float = None,
+    max_form_consistency: float = None,
+    min_transfer_momentum: int = None,
+    max_transfer_momentum: int = None,
+    ownership_category: str = None,  # Low, Medium, High, Template
+    
+    # Position-Specific Features
+    min_save_percentage: float = None,  # Goalkeepers
+    max_save_percentage: float = None,
+    min_clean_sheet_rate: float = None,  # GK/Defenders
+    max_clean_sheet_rate: float = None,
+    min_defensive_value: float = None,  # Defenders
+    max_defensive_value: float = None,
+    min_attacking_threat: float = None,  # Mid/Forwards
+    max_attacking_threat: float = None,
+    
+    # Fixture Difficulty
+    min_avg_fixture_difficulty_3: float = None,
+    max_avg_fixture_difficulty_3: float = None,
+    min_avg_fixture_difficulty_5: float = None,
+    max_avg_fixture_difficulty_5: float = None,
+    min_avg_fixture_difficulty_10: float = None,
+    max_avg_fixture_difficulty_10: float = None,
+    min_home_fixture_difficulty_5: float = None,
+    max_home_fixture_difficulty_5: float = None,
+    min_away_fixture_difficulty_5: float = None,
+    max_away_fixture_difficulty_5: float = None,
+    
+    # Ranking Features
+    min_points_rank_in_position: int = None,
+    max_points_rank_in_position: int = None,
+    min_value_rank_in_position: int = None,
+    max_value_rank_in_position: int = None,
+    min_form_rank_in_position: int = None,
+    max_form_rank_in_position: int = None,
+    
+    # Availability
+    can_transact: bool = None,
+    can_select: bool = None,
+    min_chance_of_playing: float = None,
+    max_chance_of_playing: float = None,
+    news_contains: str = None
+) -> str:
     """
-    Search for players based on various criteria like performance, cost, or stats.
+    Search for players with comprehensive filtering options including enhanced features. Returns players matching all specified filters.
     
     Args:
-        criteria: Search criteria (e.g., "most expensive", "highest expected goals", "most creative", 
-                 "best form", "highest total points", "most assists", "most goals", "best threat", 
-                 "highest influence", "best ict index", "most saves", "most clean sheets")
         limit: Number of players to return (default: 10)
+        sort_by: Column to sort results by (default: "total_points"). Common options:
+            - Performance: "total_points", "form", "points_per_game", "event_points"
+            - Value: "points_per_million", "form_per_million", "now_cost"
+            - Expected: "expected_goals", "expected_assists", "expected_goal_involvements"
+            - Enhanced: "points_per_minute", "goal_involvement_rate", "attacking_threat"
+            - Fixture: "avg_fixture_difficulty_3", "avg_fixture_difficulty_5"
+            - Consistency: "form_consistency", "transfer_momentum"
+            - Position rank: "points_rank_in_position", "value_rank_in_position"
+        ascending: Sort direction - False for highest first (default), True for lowest first
+        
+        # Player Identity
+        player_id: Specific player ID
+        first_name: Filter by first name (partial match)
+        second_name: Filter by second name (partial match)
+        web_name: Filter by display name (partial match)
+        position: Filter by position ("goalkeeper", "defender", "midfielder", "forward")
+        team: Filter by team name (partial match)
+        squad_number: Filter by jersey number
+        status: Filter by player status ("available", "injured", etc.)
+        
+        # Cost & Ownership
+        min_price: Minimum price in millions (e.g., 4.0 for £4.0m)
+        max_price: Maximum price in millions (e.g., 15.0 for £15.0m)
+        min_cost_change_event: Minimum price change this gameweek
+        max_cost_change_event: Maximum price change this gameweek
+        min_cost_change_start: Minimum price change since season start
+        max_cost_change_start: Maximum price change since season start
+        min_ownership: Minimum ownership percentage
+        max_ownership: Maximum ownership percentage
+        
+        # Performance Stats
+        min_total_points: Minimum total FPL points
+        max_total_points: Maximum total FPL points
+        min_event_points: Minimum latest gameweek points
+        max_event_points: Maximum latest gameweek points
+        min_form: Minimum form (avg points last 5 games)
+        max_form: Maximum form (avg points last 5 games)
+        min_points_per_game: Minimum points per game
+        max_points_per_game: Maximum points per game
+        min_minutes: Minimum minutes played
+        max_minutes: Maximum minutes played
+        min_goals_scored: Minimum goals scored
+        max_goals_scored: Maximum goals scored
+        min_assists: Minimum assists
+        max_assists: Maximum assists
+        min_clean_sheets: Minimum clean sheets
+        max_clean_sheets: Maximum clean sheets
+        min_goals_conceded: Minimum goals conceded
+        max_goals_conceded: Maximum goals conceded
+        min_saves: Minimum saves made
+        max_saves: Maximum saves made
+        min_yellow_cards: Minimum yellow cards
+        max_yellow_cards: Maximum yellow cards
+        min_red_cards: Minimum red cards
+        max_red_cards: Maximum red cards
+        min_bonus: Minimum bonus points
+        max_bonus: Maximum bonus points
+        min_bps: Minimum bonus points system score
+        max_bps: Maximum bonus points system score
+        
+        # Advanced Metrics
+        min_influence: Minimum influence rating
+        max_influence: Maximum influence rating
+        min_creativity: Minimum creativity rating
+        max_creativity: Maximum creativity rating
+        min_threat: Minimum threat rating
+        max_threat: Maximum threat rating
+        min_ict_index: Minimum ICT index
+        max_ict_index: Maximum ICT index
+        min_expected_goals: Minimum expected goals
+        max_expected_goals: Maximum expected goals
+        min_expected_assists: Minimum expected assists
+        max_expected_assists: Maximum expected assists
+        min_expected_goal_involvements: Minimum expected goal involvements
+        max_expected_goal_involvements: Maximum expected goal involvements
+        min_expected_goals_conceded: Minimum expected goals conceded
+        max_expected_goals_conceded: Maximum expected goals conceded
+        
+        # === ENHANCED FEATURES ===
+        # Value Metrics
+        min_points_per_million: Minimum points per million spent
+        max_points_per_million: Maximum points per million spent
+        min_form_per_million: Minimum form per million spent
+        max_form_per_million: Maximum form per million spent
+        min_expected_goals_per_million: Minimum expected goals per million
+        max_expected_goals_per_million: Maximum expected goals per million
+        
+        # Performance Efficiency
+        min_minutes_per_game: Minimum minutes per game (nailed-on status)
+        max_minutes_per_game: Maximum minutes per game
+        min_points_per_minute: Minimum points per minute played
+        max_points_per_minute: Maximum points per minute played
+        min_goal_involvement_rate: Minimum goal involvement rate
+        max_goal_involvement_rate: Maximum goal involvement rate
+        
+        # Expected vs Actual Performance
+        min_goals_overperformance: Minimum goals vs expected goals difference
+        max_goals_overperformance: Maximum goals vs expected goals difference
+        min_assists_overperformance: Minimum assists vs expected assists difference
+        max_assists_overperformance: Maximum assists vs expected assists difference
+        min_goals_luck_factor: Minimum goals luck factor (sustainability)
+        max_goals_luck_factor: Maximum goals luck factor
+        min_assists_luck_factor: Minimum assists luck factor
+        max_assists_luck_factor: Maximum assists luck factor
+        
+        # Consistency & Transfer Metrics
+        min_form_consistency: Minimum form consistency score
+        max_form_consistency: Maximum form consistency score
+        min_transfer_momentum: Minimum transfer momentum (net transfers)
+        max_transfer_momentum: Maximum transfer momentum
+        ownership_category: Filter by ownership category ("Low", "Medium", "High", "Template")
+        
+        # Position-Specific Features
+        min_save_percentage: Minimum save percentage (Goalkeepers)
+        max_save_percentage: Maximum save percentage
+        min_clean_sheet_rate: Minimum clean sheet rate (GK/Defenders)
+        max_clean_sheet_rate: Maximum clean sheet rate
+        min_defensive_value: Minimum defensive value score (Defenders)
+        max_defensive_value: Maximum defensive value score
+        min_attacking_threat: Minimum attacking threat score (Mid/Forwards)
+        max_attacking_threat: Maximum attacking threat score
+        
+        # Fixture Difficulty Analysis
+        min_avg_fixture_difficulty_3: Minimum average fixture difficulty (next 3 games)
+        max_avg_fixture_difficulty_3: Maximum average fixture difficulty (next 3 games)
+        min_avg_fixture_difficulty_5: Minimum average fixture difficulty (next 5 games)
+        max_avg_fixture_difficulty_5: Maximum average fixture difficulty (next 5 games)
+        min_avg_fixture_difficulty_10: Minimum average fixture difficulty (next 10 games)
+        max_avg_fixture_difficulty_10: Maximum average fixture difficulty (next 10 games)
+        min_home_fixture_difficulty_5: Minimum home fixture difficulty (next 5 home games)
+        max_home_fixture_difficulty_5: Maximum home fixture difficulty (next 5 home games)
+        min_away_fixture_difficulty_5: Minimum away fixture difficulty (next 5 away games)
+        max_away_fixture_difficulty_5: Maximum away fixture difficulty (next 5 away games)
+        
+        # Position Rankings
+        min_points_rank_in_position: Minimum points rank within position
+        max_points_rank_in_position: Maximum points rank within position
+        min_value_rank_in_position: Minimum value rank within position
+        max_value_rank_in_position: Maximum value rank within position
+        min_form_rank_in_position: Minimum form rank within position
+        max_form_rank_in_position: Maximum form rank within position
+        
+        # Availability
+        can_transact: Filter by transaction availability (True/False)
+        can_select: Filter by selection availability (True/False)
+        min_chance_of_playing: Minimum injury probability (0-100)
+        max_chance_of_playing: Maximum injury probability (0-100)
+        news_contains: Filter by news content (partial match)
     
     Returns:
-        String with top players matching the criteria
+        String with players matching the criteria and filters, sorted by specified metric
+        
+    Examples for AI agent:
+        # Get top scorers
+        search_players(sort_by="total_points", limit=5)
+        
+        # Best value midfielders under £8m
+        search_players(position="midfielder", max_price=8.0, sort_by="points_per_million", limit=10)
+        
+        # Most consistent players with easy fixtures
+        search_players(sort_by="form_consistency", ascending=True, max_avg_fixture_difficulty_5=3.0)
+        
+        # Players with highest expected goals
+        search_players(sort_by="expected_goals", min_minutes=300, limit=15)
     """
     try:
         # Get the project root directory
@@ -208,56 +600,99 @@ def search_players(criteria: str, limit: int = 10) -> str:
         elements_path = os.path.join(project_root, 'fpl_data', 'fpl_data', 'elements.parquet')
         teams_path = os.path.join(project_root, 'fpl_data', 'fpl_data', 'teams.json')
         
-        # Define criteria mappings: search term -> (column, ascending/descending, display_name)
-        criteria_mappings = {
-            # Cost criteria
-            'most expensive': ('now_cost', False, 'Most Expensive'),
-            'cheapest': ('now_cost', True, 'Cheapest'),
+        # Base columns always needed (including total_points for default sorting)
+        base_columns = ['id', 'web_name', 'first_name', 'second_name', 'team', 'element_type', 'now_cost', 'total_points']
+        columns_to_load = base_columns.copy()
+        
+        # Add columns needed for filtering
+        filter_columns = {
+            # Player Identity (already in base)
             
-            # Points criteria
-            'highest total points': ('total_points', False, 'Highest Total Points'),
-            'best form': ('form', False, 'Best Form'),
-            'highest points per game': ('points_per_game', False, 'Highest Points Per Game'),
+            # Team Information
+            'squad_number': squad_number,
+            'status': status,
             
-            # Advanced metrics
-            'most creative': ('creativity', False, 'Most Creative'),
-            'highest threat': ('threat', False, 'Highest Threat'),
-            'highest influence': ('influence', False, 'Highest Influence'),
-            'best ict index': ('ict_index', False, 'Best ICT Index'),
-            'highest expected goals': ('expected_goals', False, 'Highest Expected Goals'),
-            'highest expected assists': ('expected_assists', False, 'Highest Expected Assists'),
-            'highest expected goal involvements': ('expected_goal_involvements', False, 'Highest Expected Goal Involvements'),
+            # Cost & Ownership
+            'cost_change_event': any([min_cost_change_event, max_cost_change_event]),
+            'cost_change_start': any([min_cost_change_start, max_cost_change_start]),
+            'selected_by_percent': any([min_ownership, max_ownership]),
             
-            # Basic stats
-            'most goals': ('goals_scored', False, 'Most Goals'),
-            'most assists': ('assists', False, 'Most Assists'),
-            'most minutes': ('minutes', False, 'Most Minutes Played'),
-            'most saves': ('saves', False, 'Most Saves'),
-            'most clean sheets': ('clean_sheets', False, 'Most Clean Sheets'),
+            # Performance Stats
+            'total_points': any([min_total_points, max_total_points]),
+            'event_points': any([min_event_points, max_event_points]),
+            'form': any([min_form, max_form]),
+            'points_per_game': any([min_points_per_game, max_points_per_game]),
+            'minutes': any([min_minutes, max_minutes]),
+            'goals_scored': any([min_goals_scored, max_goals_scored]),
+            'assists': any([min_assists, max_assists]),
+            'clean_sheets': any([min_clean_sheets, max_clean_sheets]),
+            'goals_conceded': any([min_goals_conceded, max_goals_conceded]),
+            'saves': any([min_saves, max_saves]),
+            'yellow_cards': any([min_yellow_cards, max_yellow_cards]),
+            'red_cards': any([min_red_cards, max_red_cards]),
+            'bonus': any([min_bonus, max_bonus]),
+            'bps': any([min_bps, max_bps]),
+            
+            # Advanced Metrics
+            'influence': any([min_influence, max_influence]),
+            'creativity': any([min_creativity, max_creativity]),
+            'threat': any([min_threat, max_threat]),
+            'ict_index': any([min_ict_index, max_ict_index]),
+            'expected_goals': any([min_expected_goals, max_expected_goals]),
+            'expected_assists': any([min_expected_assists, max_expected_assists]),
+            'expected_goal_involvements': any([min_expected_goal_involvements, max_expected_goal_involvements]),
+            'expected_goals_conceded': any([min_expected_goals_conceded, max_expected_goals_conceded]),
+            
+            # Enhanced Value Metrics
+            'points_per_million': any([min_points_per_million, max_points_per_million]),
+            'form_per_million': any([min_form_per_million, max_form_per_million]),
+            'expected_goals_per_million': any([min_expected_goals_per_million, max_expected_goals_per_million]),
+            
+            # Performance Efficiency
+            'minutes_per_game': any([min_minutes_per_game, max_minutes_per_game]),
+            'points_per_minute': any([min_points_per_minute, max_points_per_minute]),
+            'goal_involvement_rate': any([min_goal_involvement_rate, max_goal_involvement_rate]),
+            
+            # Expected vs Actual
+            'goals_overperformance': any([min_goals_overperformance, max_goals_overperformance]),
+            'assists_overperformance': any([min_assists_overperformance, max_assists_overperformance]),
+            'goals_luck_factor': any([min_goals_luck_factor, max_goals_luck_factor]),
+            'assists_luck_factor': any([min_assists_luck_factor, max_assists_luck_factor]),
+            
+            # Consistency & Transfer Metrics
+            'form_consistency': any([min_form_consistency, max_form_consistency]),
+            'transfer_momentum': any([min_transfer_momentum, max_transfer_momentum]),
+            'ownership_category': ownership_category,
+            
+            # Position-Specific Features
+            'save_percentage': any([min_save_percentage, max_save_percentage]),
+            'clean_sheet_rate': any([min_clean_sheet_rate, max_clean_sheet_rate]),
+            'defensive_value': any([min_defensive_value, max_defensive_value]),
+            'attacking_threat': any([min_attacking_threat, max_attacking_threat]),
+            
+            # Fixture Difficulty Analysis
+            'avg_fixture_difficulty_3': any([min_avg_fixture_difficulty_3, max_avg_fixture_difficulty_3]),
+            'avg_fixture_difficulty_5': any([min_avg_fixture_difficulty_5, max_avg_fixture_difficulty_5]),
+            'avg_fixture_difficulty_10': any([min_avg_fixture_difficulty_10, max_avg_fixture_difficulty_10]),
+            'home_fixture_difficulty_5': any([min_home_fixture_difficulty_5, max_home_fixture_difficulty_5]),
+            'away_fixture_difficulty_5': any([min_away_fixture_difficulty_5, max_away_fixture_difficulty_5]),
+            
+            # Position Rankings
+            'points_rank_in_position': any([min_points_rank_in_position, max_points_rank_in_position]),
+            'value_rank_in_position': any([min_value_rank_in_position, max_value_rank_in_position]),
+            'form_rank_in_position': any([min_form_rank_in_position, max_form_rank_in_position]),
+            
+            # Availability
+            'can_transact': can_transact,
+            'can_select': can_select,
+            'chance_of_playing_next_round': any([min_chance_of_playing, max_chance_of_playing]),
+            'news': news_contains
         }
         
-        # Find matching criteria (case insensitive)
-        criteria_lower = criteria.lower()
-        matching_criteria = None
-        
-        for key, value in criteria_mappings.items():
-            if key in criteria_lower or criteria_lower in key:
-                matching_criteria = value
-                break
-        
-        if not matching_criteria:
-            available_criteria = ', '.join(f'"{k}"' for k in sorted(criteria_mappings.keys()))
-            return f"Unknown criteria '{criteria}'. Available criteria: {available_criteria}"
-        
-        sort_column, ascending, display_name = matching_criteria
-        
-        # Base columns always needed
-        base_columns = ['id', 'web_name', 'first_name', 'second_name', 'team', 'element_type', 'now_cost']
-        
-        # Add the specific column for sorting if not already included
-        columns_to_load = base_columns.copy()
-        if sort_column not in columns_to_load:
-            columns_to_load.append(sort_column)
+        # Add needed columns to load list
+        for col, needed in filter_columns.items():
+            if needed and col not in columns_to_load:
+                columns_to_load.append(col)
         
         # Load player data with only needed columns
         players_df = pd.read_parquet(elements_path, columns=columns_to_load)
@@ -277,52 +712,794 @@ def search_players(criteria: str, limit: int = 10) -> str:
         # Convert price to millions for display
         players_df['price_display'] = players_df['now_cost'] / 10
         
-        # Handle string columns that need to be converted to numeric
-        if sort_column in ['form', 'points_per_game', 'creativity', 'threat', 'influence', 
-                          'ict_index', 'expected_goals', 'expected_assists', 'expected_goal_involvements']:
-            # Convert to numeric, handling empty strings and invalid values
-            players_df[sort_column] = pd.to_numeric(players_df[sort_column], errors='coerce')
+        # Convert string columns to numeric for any loaded columns that need it
+        numeric_columns = ['form', 'points_per_game', 'creativity', 'threat', 'influence', 
+                          'ict_index', 'expected_goals', 'expected_assists', 'expected_goal_involvements']
+        for col in numeric_columns:
+            if col in players_df.columns:
+                players_df[col] = pd.to_numeric(players_df[col], errors='coerce')
         
-        # Remove players with NaN values in the sort column
-        players_df = players_df.dropna(subset=[sort_column])
+        # Apply filters
+        filtered_players = players_df.copy()
         
-        # Sort by criteria
-        sorted_players = players_df.sort_values(sort_column, ascending=ascending).head(limit)
+        # Helper function to convert string columns to numeric
+        def convert_to_numeric(df, column):
+            if column in df.columns:
+                df[column] = pd.to_numeric(df[column], errors='coerce')
+            return df
+        
+        # Player Identity filters
+        if player_id is not None:
+            filtered_players = filtered_players[filtered_players['id'] == player_id]
+        if first_name:
+            filtered_players = filtered_players[filtered_players['first_name'].str.contains(first_name, case=False, na=False)]
+        if second_name:
+            filtered_players = filtered_players[filtered_players['second_name'].str.contains(second_name, case=False, na=False)]
+        if web_name:
+            filtered_players = filtered_players[filtered_players['web_name'].str.contains(web_name, case=False, na=False)]
+        
+        # Position filter
+        if position:
+            position_map = {
+                'goalkeeper': 1, 'gk': 1,
+                'defender': 2, 'def': 2, 'defence': 2,
+                'midfielder': 3, 'mid': 3, 'midfield': 3,
+                'forward': 4, 'fwd': 4, 'attack': 4, 'attacker': 4
+            }
+            position_id = position_map.get(position.lower())
+            if position_id:
+                filtered_players = filtered_players[filtered_players['element_type'] == position_id]
+            else:
+                return f"Invalid position '{position}'. Use: goalkeeper, defender, midfielder, or forward"
+        
+        # Team Information filters
+        if team:
+            # Find team ID by name (case insensitive)
+            team_id = None
+            for tid, tname in team_lookup.items():
+                if team.lower() in tname.lower() or tname.lower() in team.lower():
+                    team_id = tid
+                    break
+            if team_id:
+                filtered_players = filtered_players[filtered_players['team'] == team_id]
+            else:
+                available_teams = ', '.join(sorted(team_lookup.values()))
+                return f"Team '{team}' not found. Available teams: {available_teams}"
+        
+        if squad_number:
+            filtered_players = filtered_players[filtered_players['squad_number'].astype(str) == str(squad_number)]
+        if status:
+            filtered_players = filtered_players[filtered_players['status'].str.contains(status, case=False, na=False)]
+        
+        # Cost & Ownership filters
+        if min_price is not None:
+            filtered_players = filtered_players[filtered_players['now_cost'] >= min_price * 10]
+        if max_price is not None:
+            filtered_players = filtered_players[filtered_players['now_cost'] <= max_price * 10]
+        if min_cost_change_event is not None:
+            filtered_players = filtered_players[filtered_players['cost_change_event'] >= min_cost_change_event]
+        if max_cost_change_event is not None:
+            filtered_players = filtered_players[filtered_players['cost_change_event'] <= max_cost_change_event]
+        if min_cost_change_start is not None:
+            filtered_players = filtered_players[filtered_players['cost_change_start'] >= min_cost_change_start]
+        if max_cost_change_start is not None:
+            filtered_players = filtered_players[filtered_players['cost_change_start'] <= max_cost_change_start]
+        if min_ownership is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'selected_by_percent')
+            filtered_players = filtered_players[filtered_players['selected_by_percent'] >= min_ownership]
+        if max_ownership is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'selected_by_percent')
+            filtered_players = filtered_players[filtered_players['selected_by_percent'] <= max_ownership]
+        
+        # Performance Stats filters
+        if min_total_points is not None:
+            filtered_players = filtered_players[filtered_players['total_points'] >= min_total_points]
+        if max_total_points is not None:
+            filtered_players = filtered_players[filtered_players['total_points'] <= max_total_points]
+        if min_event_points is not None:
+            filtered_players = filtered_players[filtered_players['event_points'] >= min_event_points]
+        if max_event_points is not None:
+            filtered_players = filtered_players[filtered_players['event_points'] <= max_event_points]
+        if min_form is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'form')
+            filtered_players = filtered_players[filtered_players['form'] >= min_form]
+        if max_form is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'form')
+            filtered_players = filtered_players[filtered_players['form'] <= max_form]
+        if min_points_per_game is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'points_per_game')
+            filtered_players = filtered_players[filtered_players['points_per_game'] >= min_points_per_game]
+        if max_points_per_game is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'points_per_game')
+            filtered_players = filtered_players[filtered_players['points_per_game'] <= max_points_per_game]
+        if min_minutes is not None:
+            filtered_players = filtered_players[filtered_players['minutes'] >= min_minutes]
+        if max_minutes is not None:
+            filtered_players = filtered_players[filtered_players['minutes'] <= max_minutes]
+        if min_goals_scored is not None:
+            filtered_players = filtered_players[filtered_players['goals_scored'] >= min_goals_scored]
+        if max_goals_scored is not None:
+            filtered_players = filtered_players[filtered_players['goals_scored'] <= max_goals_scored]
+        if min_assists is not None:
+            filtered_players = filtered_players[filtered_players['assists'] >= min_assists]
+        if max_assists is not None:
+            filtered_players = filtered_players[filtered_players['assists'] <= max_assists]
+        if min_clean_sheets is not None:
+            filtered_players = filtered_players[filtered_players['clean_sheets'] >= min_clean_sheets]
+        if max_clean_sheets is not None:
+            filtered_players = filtered_players[filtered_players['clean_sheets'] <= max_clean_sheets]
+        if min_goals_conceded is not None:
+            filtered_players = filtered_players[filtered_players['goals_conceded'] >= min_goals_conceded]
+        if max_goals_conceded is not None:
+            filtered_players = filtered_players[filtered_players['goals_conceded'] <= max_goals_conceded]
+        if min_saves is not None:
+            filtered_players = filtered_players[filtered_players['saves'] >= min_saves]
+        if max_saves is not None:
+            filtered_players = filtered_players[filtered_players['saves'] <= max_saves]
+        if min_yellow_cards is not None:
+            filtered_players = filtered_players[filtered_players['yellow_cards'] >= min_yellow_cards]
+        if max_yellow_cards is not None:
+            filtered_players = filtered_players[filtered_players['yellow_cards'] <= max_yellow_cards]
+        if min_red_cards is not None:
+            filtered_players = filtered_players[filtered_players['red_cards'] >= min_red_cards]
+        if max_red_cards is not None:
+            filtered_players = filtered_players[filtered_players['red_cards'] <= max_red_cards]
+        if min_bonus is not None:
+            filtered_players = filtered_players[filtered_players['bonus'] >= min_bonus]
+        if max_bonus is not None:
+            filtered_players = filtered_players[filtered_players['bonus'] <= max_bonus]
+        if min_bps is not None:
+            filtered_players = filtered_players[filtered_players['bps'] >= min_bps]
+        if max_bps is not None:
+            filtered_players = filtered_players[filtered_players['bps'] <= max_bps]
+        
+        # Advanced Metrics filters
+        if min_influence is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'influence')
+            filtered_players = filtered_players[filtered_players['influence'] >= min_influence]
+        if max_influence is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'influence')
+            filtered_players = filtered_players[filtered_players['influence'] <= max_influence]
+        if min_creativity is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'creativity')
+            filtered_players = filtered_players[filtered_players['creativity'] >= min_creativity]
+        if max_creativity is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'creativity')
+            filtered_players = filtered_players[filtered_players['creativity'] <= max_creativity]
+        if min_threat is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'threat')
+            filtered_players = filtered_players[filtered_players['threat'] >= min_threat]
+        if max_threat is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'threat')
+            filtered_players = filtered_players[filtered_players['threat'] <= max_threat]
+        if min_ict_index is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'ict_index')
+            filtered_players = filtered_players[filtered_players['ict_index'] >= min_ict_index]
+        if max_ict_index is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'ict_index')
+            filtered_players = filtered_players[filtered_players['ict_index'] <= max_ict_index]
+        if min_expected_goals is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'expected_goals')
+            filtered_players = filtered_players[filtered_players['expected_goals'] >= min_expected_goals]
+        if max_expected_goals is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'expected_goals')
+            filtered_players = filtered_players[filtered_players['expected_goals'] <= max_expected_goals]
+        if min_expected_assists is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'expected_assists')
+            filtered_players = filtered_players[filtered_players['expected_assists'] >= min_expected_assists]
+        if max_expected_assists is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'expected_assists')
+            filtered_players = filtered_players[filtered_players['expected_assists'] <= max_expected_assists]
+        if min_expected_goal_involvements is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'expected_goal_involvements')
+            filtered_players = filtered_players[filtered_players['expected_goal_involvements'] >= min_expected_goal_involvements]
+        if max_expected_goal_involvements is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'expected_goal_involvements')
+            filtered_players = filtered_players[filtered_players['expected_goal_involvements'] <= max_expected_goal_involvements]
+        if min_expected_goals_conceded is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'expected_goals_conceded')
+            filtered_players = filtered_players[filtered_players['expected_goals_conceded'] >= min_expected_goals_conceded]
+        if max_expected_goals_conceded is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'expected_goals_conceded')
+            filtered_players = filtered_players[filtered_players['expected_goals_conceded'] <= max_expected_goals_conceded]
+        
+        # === ENHANCED FEATURES FILTERS ===
+        # Value Metrics filters
+        if min_points_per_million is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'points_per_million')
+            filtered_players = filtered_players[filtered_players['points_per_million'] >= min_points_per_million]
+        if max_points_per_million is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'points_per_million')
+            filtered_players = filtered_players[filtered_players['points_per_million'] <= max_points_per_million]
+        if min_form_per_million is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'form_per_million')
+            filtered_players = filtered_players[filtered_players['form_per_million'] >= min_form_per_million]
+        if max_form_per_million is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'form_per_million')
+            filtered_players = filtered_players[filtered_players['form_per_million'] <= max_form_per_million]
+        if min_expected_goals_per_million is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'expected_goals_per_million')
+            filtered_players = filtered_players[filtered_players['expected_goals_per_million'] >= min_expected_goals_per_million]
+        if max_expected_goals_per_million is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'expected_goals_per_million')
+            filtered_players = filtered_players[filtered_players['expected_goals_per_million'] <= max_expected_goals_per_million]
+        
+        # Performance Efficiency filters
+        if min_minutes_per_game is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'minutes_per_game')
+            filtered_players = filtered_players[filtered_players['minutes_per_game'] >= min_minutes_per_game]
+        if max_minutes_per_game is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'minutes_per_game')
+            filtered_players = filtered_players[filtered_players['minutes_per_game'] <= max_minutes_per_game]
+        if min_points_per_minute is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'points_per_minute')
+            filtered_players = filtered_players[filtered_players['points_per_minute'] >= min_points_per_minute]
+        if max_points_per_minute is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'points_per_minute')
+            filtered_players = filtered_players[filtered_players['points_per_minute'] <= max_points_per_minute]
+        if min_goal_involvement_rate is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'goal_involvement_rate')
+            filtered_players = filtered_players[filtered_players['goal_involvement_rate'] >= min_goal_involvement_rate]
+        if max_goal_involvement_rate is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'goal_involvement_rate')
+            filtered_players = filtered_players[filtered_players['goal_involvement_rate'] <= max_goal_involvement_rate]
+        
+        # Expected vs Actual Performance filters
+        if min_goals_overperformance is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'goals_overperformance')
+            filtered_players = filtered_players[filtered_players['goals_overperformance'] >= min_goals_overperformance]
+        if max_goals_overperformance is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'goals_overperformance')
+            filtered_players = filtered_players[filtered_players['goals_overperformance'] <= max_goals_overperformance]
+        if min_assists_overperformance is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'assists_overperformance')
+            filtered_players = filtered_players[filtered_players['assists_overperformance'] >= min_assists_overperformance]
+        if max_assists_overperformance is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'assists_overperformance')
+            filtered_players = filtered_players[filtered_players['assists_overperformance'] <= max_assists_overperformance]
+        if min_goals_luck_factor is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'goals_luck_factor')
+            filtered_players = filtered_players[filtered_players['goals_luck_factor'] >= min_goals_luck_factor]
+        if max_goals_luck_factor is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'goals_luck_factor')
+            filtered_players = filtered_players[filtered_players['goals_luck_factor'] <= max_goals_luck_factor]
+        if min_assists_luck_factor is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'assists_luck_factor')
+            filtered_players = filtered_players[filtered_players['assists_luck_factor'] >= min_assists_luck_factor]
+        if max_assists_luck_factor is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'assists_luck_factor')
+            filtered_players = filtered_players[filtered_players['assists_luck_factor'] <= max_assists_luck_factor]
+        
+        # Consistency & Transfer Metrics filters
+        if min_form_consistency is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'form_consistency')
+            filtered_players = filtered_players[filtered_players['form_consistency'] >= min_form_consistency]
+        if max_form_consistency is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'form_consistency')
+            filtered_players = filtered_players[filtered_players['form_consistency'] <= max_form_consistency]
+        if min_transfer_momentum is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'transfer_momentum')
+            filtered_players = filtered_players[filtered_players['transfer_momentum'] >= min_transfer_momentum]
+        if max_transfer_momentum is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'transfer_momentum')
+            filtered_players = filtered_players[filtered_players['transfer_momentum'] <= max_transfer_momentum]
+        if ownership_category:
+            filtered_players = filtered_players[filtered_players['ownership_category'].str.contains(ownership_category, case=False, na=False)]
+        
+        # Position-Specific Features filters
+        if min_save_percentage is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'save_percentage')
+            filtered_players = filtered_players[filtered_players['save_percentage'] >= min_save_percentage]
+        if max_save_percentage is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'save_percentage')
+            filtered_players = filtered_players[filtered_players['save_percentage'] <= max_save_percentage]
+        if min_clean_sheet_rate is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'clean_sheet_rate')
+            filtered_players = filtered_players[filtered_players['clean_sheet_rate'] >= min_clean_sheet_rate]
+        if max_clean_sheet_rate is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'clean_sheet_rate')
+            filtered_players = filtered_players[filtered_players['clean_sheet_rate'] <= max_clean_sheet_rate]
+        if min_defensive_value is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'defensive_value')
+            filtered_players = filtered_players[filtered_players['defensive_value'] >= min_defensive_value]
+        if max_defensive_value is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'defensive_value')
+            filtered_players = filtered_players[filtered_players['defensive_value'] <= max_defensive_value]
+        if min_attacking_threat is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'attacking_threat')
+            filtered_players = filtered_players[filtered_players['attacking_threat'] >= min_attacking_threat]
+        if max_attacking_threat is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'attacking_threat')
+            filtered_players = filtered_players[filtered_players['attacking_threat'] <= max_attacking_threat]
+        
+        # Fixture Difficulty filters
+        if min_avg_fixture_difficulty_3 is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'avg_fixture_difficulty_3')
+            filtered_players = filtered_players[filtered_players['avg_fixture_difficulty_3'] >= min_avg_fixture_difficulty_3]
+        if max_avg_fixture_difficulty_3 is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'avg_fixture_difficulty_3')
+            filtered_players = filtered_players[filtered_players['avg_fixture_difficulty_3'] <= max_avg_fixture_difficulty_3]
+        if min_avg_fixture_difficulty_5 is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'avg_fixture_difficulty_5')
+            filtered_players = filtered_players[filtered_players['avg_fixture_difficulty_5'] >= min_avg_fixture_difficulty_5]
+        if max_avg_fixture_difficulty_5 is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'avg_fixture_difficulty_5')
+            filtered_players = filtered_players[filtered_players['avg_fixture_difficulty_5'] <= max_avg_fixture_difficulty_5]
+        if min_avg_fixture_difficulty_10 is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'avg_fixture_difficulty_10')
+            filtered_players = filtered_players[filtered_players['avg_fixture_difficulty_10'] >= min_avg_fixture_difficulty_10]
+        if max_avg_fixture_difficulty_10 is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'avg_fixture_difficulty_10')
+            filtered_players = filtered_players[filtered_players['avg_fixture_difficulty_10'] <= max_avg_fixture_difficulty_10]
+        if min_home_fixture_difficulty_5 is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'home_fixture_difficulty_5')
+            filtered_players = filtered_players[filtered_players['home_fixture_difficulty_5'] >= min_home_fixture_difficulty_5]
+        if max_home_fixture_difficulty_5 is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'home_fixture_difficulty_5')
+            filtered_players = filtered_players[filtered_players['home_fixture_difficulty_5'] <= max_home_fixture_difficulty_5]
+        if min_away_fixture_difficulty_5 is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'away_fixture_difficulty_5')
+            filtered_players = filtered_players[filtered_players['away_fixture_difficulty_5'] >= min_away_fixture_difficulty_5]
+        if max_away_fixture_difficulty_5 is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'away_fixture_difficulty_5')
+            filtered_players = filtered_players[filtered_players['away_fixture_difficulty_5'] <= max_away_fixture_difficulty_5]
+        
+        # Ranking Features filters
+        if min_points_rank_in_position is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'points_rank_in_position')
+            filtered_players = filtered_players[filtered_players['points_rank_in_position'] >= min_points_rank_in_position]
+        if max_points_rank_in_position is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'points_rank_in_position')
+            filtered_players = filtered_players[filtered_players['points_rank_in_position'] <= max_points_rank_in_position]
+        if min_value_rank_in_position is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'value_rank_in_position')
+            filtered_players = filtered_players[filtered_players['value_rank_in_position'] >= min_value_rank_in_position]
+        if max_value_rank_in_position is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'value_rank_in_position')
+            filtered_players = filtered_players[filtered_players['value_rank_in_position'] <= max_value_rank_in_position]
+        if min_form_rank_in_position is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'form_rank_in_position')
+            filtered_players = filtered_players[filtered_players['form_rank_in_position'] >= min_form_rank_in_position]
+        if max_form_rank_in_position is not None:
+            filtered_players = convert_to_numeric(filtered_players, 'form_rank_in_position')
+            filtered_players = filtered_players[filtered_players['form_rank_in_position'] <= max_form_rank_in_position]
+        
+        # Availability filters
+        if can_transact is not None:
+            filtered_players = filtered_players[filtered_players['can_transact'] == can_transact]
+        if can_select is not None:
+            filtered_players = filtered_players[filtered_players['can_select'] == can_select]
+        if min_chance_of_playing is not None:
+            filtered_players = filtered_players[filtered_players['chance_of_playing_next_round'] >= min_chance_of_playing]
+        if max_chance_of_playing is not None:
+            filtered_players = filtered_players[filtered_players['chance_of_playing_next_round'] <= max_chance_of_playing]
+        if news_contains:
+            filtered_players = filtered_players[filtered_players['news'].str.contains(news_contains, case=False, na=False)]
+        
+        # Check if we have any players left after filtering
+        if filtered_players.empty:
+            return "No players found matching the applied filters."
+        
+        # Ensure sort column is available in the data
+        if sort_by not in filtered_players.columns:
+            # Try common alternative column names
+            column_aliases = {
+                'price': 'now_cost',
+                'cost': 'now_cost', 
+                'points': 'total_points',
+                'xg': 'expected_goals',
+                'xa': 'expected_assists',
+                'ict': 'ict_index'
+            }
+            actual_sort_column = column_aliases.get(sort_by.lower(), 'total_points')
+            if actual_sort_column not in filtered_players.columns:
+                actual_sort_column = 'total_points'  # Final fallback
+        else:
+            actual_sort_column = sort_by
+        
+        # Sort and limit results
+        limit_int = int(limit) if limit is not None else 10
+        sorted_players = filtered_players.sort_values(actual_sort_column, ascending=ascending).head(limit_int)
         
         if sorted_players.empty:
-            return f"No players found for criteria '{criteria}'"
+            return "No players found matching the filters."
         
         # Format results
         result_lines = []
-        result_lines.append(f"{display_name} (Top {len(sorted_players)}):")
+        sort_direction = "ascending" if ascending else "descending" 
+        result_lines.append(f"Players Found ({len(sorted_players)} results, sorted by {actual_sort_column} {sort_direction}):")
         result_lines.append("")
         
         for rank, (_, player) in enumerate(sorted_players.iterrows(), 1):
-            # Get the value for display
-            value = player[sort_column]
+            # Build display line with relevant information
+            line_parts = [
+                f"{rank}. {player['web_name']} ({player['position']})",
+                f"{player['team_name']}",
+                f"£{player['price_display']:.1f}m"
+            ]
             
-            # Format value based on column type
-            if sort_column == 'now_cost':
-                value_display = f"£{player['price_display']:.1f}m"
-            elif sort_column in ['form', 'points_per_game', 'creativity', 'threat', 'influence', 
-                               'ict_index', 'expected_goals', 'expected_assists', 'expected_goal_involvements']:
-                value_display = f"{value:.1f}" if pd.notna(value) else "N/A"
-            else:
-                value_display = f"{int(value)}" if pd.notna(value) else "N/A"
+            # Always show the metrics that were filtered by (user requested data)
+            metrics_to_show = []
             
-            # Format: "1. Player Name (Position) - Team - Value (ID: X)"
-            line = f"{rank}. {player['web_name']} ({player['position']}) - {player['team_name']} - {value_display} (ID: {player['id']})"
-            result_lines.append(line)
+            # Check which filters were applied and show those metrics
+            if any([min_total_points, max_total_points]) and 'total_points' in player:
+                metrics_to_show.append(f"pts: {int(player['total_points']) if pd.notna(player['total_points']) else 'N/A'}")
+            
+            if any([min_expected_goals, max_expected_goals]) and 'expected_goals' in player:
+                metrics_to_show.append(f"xG: {player['expected_goals']:.1f}" if pd.notna(player['expected_goals']) else "xG: N/A")
+            
+            if any([min_expected_assists, max_expected_assists]) and 'expected_assists' in player:
+                metrics_to_show.append(f"xA: {player['expected_assists']:.1f}" if pd.notna(player['expected_assists']) else "xA: N/A")
+            
+            if any([min_goals_scored, max_goals_scored]) and 'goals_scored' in player:
+                metrics_to_show.append(f"goals: {int(player['goals_scored']) if pd.notna(player['goals_scored']) else 'N/A'}")
+            
+            if any([min_assists, max_assists]) and 'assists' in player:
+                metrics_to_show.append(f"assists: {int(player['assists']) if pd.notna(player['assists']) else 'N/A'}")
+            
+            if any([min_form, max_form]) and 'form' in player:
+                metrics_to_show.append(f"form: {player['form']:.1f}" if pd.notna(player['form']) else "form: N/A")
+            
+            if any([min_creativity, max_creativity]) and 'creativity' in player:
+                metrics_to_show.append(f"creativity: {player['creativity']:.1f}" if pd.notna(player['creativity']) else "creativity: N/A")
+            
+            if any([min_threat, max_threat]) and 'threat' in player:
+                metrics_to_show.append(f"threat: {player['threat']:.1f}" if pd.notna(player['threat']) else "threat: N/A")
+            
+            if any([min_influence, max_influence]) and 'influence' in player:
+                metrics_to_show.append(f"influence: {player['influence']:.1f}" if pd.notna(player['influence']) else "influence: N/A")
+            
+            if any([min_ict_index, max_ict_index]) and 'ict_index' in player:
+                metrics_to_show.append(f"ICT: {player['ict_index']:.1f}" if pd.notna(player['ict_index']) else "ICT: N/A")
+            
+            if any([min_clean_sheets, max_clean_sheets]) and 'clean_sheets' in player:
+                metrics_to_show.append(f"CS: {int(player['clean_sheets']) if pd.notna(player['clean_sheets']) else 'N/A'}")
+            
+            if any([min_saves, max_saves]) and 'saves' in player:
+                metrics_to_show.append(f"saves: {int(player['saves']) if pd.notna(player['saves']) else 'N/A'}")
+            
+            if any([min_minutes, max_minutes]) and 'minutes' in player:
+                metrics_to_show.append(f"mins: {int(player['minutes']) if pd.notna(player['minutes']) else 'N/A'}")
+            
+            if any([min_ownership, max_ownership]) and 'selected_by_percent' in player:
+                metrics_to_show.append(f"owned: {player['selected_by_percent']:.1f}%" if pd.notna(player['selected_by_percent']) else "owned: N/A")
+            
+            # Add the filtered metrics to the display
+            if metrics_to_show:
+                line_parts.append(" | ".join(metrics_to_show))
+            
+            line_parts.append(f"(ID: {player['id']})")
+            result_lines.append(" - ".join(line_parts))
         
         return "\n".join(result_lines)
+    except Exception as e:
+        # Log the full exception with traceback for debugging
+        logging.error(f"Error in search_players: {str(e)}")
+        logging.error(f"Exception type: {type(e).__name__}")
+        logging.error(f"Traceback: {traceback.format_exc()}")
+        
+        # Return user-friendly error message
+        return f"Error searching players: {str(e)}"
+
+
+@tool
+def get_top_players_by_metric(
+    metric: str,
+    limit: int = 10,
+    position: str = None,
+    min_price: float = None,
+    max_price: float = None,
+    min_minutes: int = None,
+    ascending: bool = False
+) -> str:
+    """
+    Get top players ranked by any metric with optional position and price filtering.
+    Perfect for queries like "highest scoring", "best value", "most consistent", etc.
+    
+    ONLY use this tool if the user has explicitly asked for the top players or if the top players can help solve the user's question.
+
+    Args:
+        metric: The metric to rank by. Common options include:
+            # Basic Stats
+            'total_points', 'form', 'points_per_game', 'goals_scored', 'assists',
+            'clean_sheets', 'saves', 'bonus', 'bps', 'minutes'
+            
+            # Value Metrics
+            'points_per_million', 'form_per_million', 'expected_goals_per_million'
+            
+            # Performance Efficiency
+            'minutes_per_game', 'points_per_minute', 'goal_involvement_rate'
+            
+            # Expected vs Actual
+            'goals_overperformance', 'assists_overperformance', 'goals_luck_factor', 'assists_luck_factor'
+            
+            # Advanced Metrics
+            'influence', 'creativity', 'threat', 'ict_index', 'expected_goals', 'expected_assists'
+            
+            # Consistency & Transfers
+            'form_consistency', 'transfer_momentum'
+            
+            # Position-Specific
+            'save_percentage', 'clean_sheet_rate', 'defensive_value', 'attacking_threat'
+            
+            # Fixture Difficulty
+            'avg_fixture_difficulty_3', 'avg_fixture_difficulty_5', 'avg_fixture_difficulty_10'
+            
+        limit: Number of top players to return (default: 10)
+        position: Filter by position ("goalkeeper", "defender", "midfielder", "forward")
+        min_price: Minimum price in millions (e.g., 4.0 for £4.0m)
+        max_price: Maximum price in millions (e.g., 15.0 for £15.0m)
+        min_minutes: Minimum minutes played (to filter out bench players)
+        ascending: If True, sort ascending (lowest first). If False, sort descending (highest first)
+    
+    Returns:
+        String with top players ranked by the specified metric
+    """
+    try:
+        # Load player data
+        players_df = pd.read_parquet('/Users/geirfreysson/Code/fpl-agent/fpl_data/fpl_data/elements.parquet')
+        teams_df = pd.read_json('/Users/geirfreysson/Code/fpl-agent/fpl_data/fpl_data/teams.json')
+        
+        # Create team lookup
+        team_lookup = {row['id']: row['name'] for _, row in teams_df.iterrows()}
+        
+        # Position mapping
+        position_names = {1: 'GK', 2: 'DEF', 3: 'MID', 4: 'FWD'}
+        
+        # Check if metric exists
+        if metric not in players_df.columns:
+            available_metrics = [col for col in players_df.columns if col not in ['id', 'first_name', 'second_name', 'web_name']]
+            return f"Metric '{metric}' not found. Available metrics include: {', '.join(sorted(available_metrics)[:20])}..."
+        
+        # Convert metric column to numeric
+        players_df[metric] = pd.to_numeric(players_df[metric], errors='coerce')
+        
+        # Apply filters
+        filtered_players = players_df.copy()
+        
+        # Position filter
+        if position:
+            position_map = {
+                'goalkeeper': 1, 'gk': 1,
+                'defender': 2, 'def': 2, 'defence': 2,
+                'midfielder': 3, 'mid': 3, 'midfield': 3,
+                'forward': 4, 'fwd': 4, 'attack': 4, 'attacker': 4
+            }
+            position_id = position_map.get(position.lower())
+            if position_id:
+                filtered_players = filtered_players[filtered_players['element_type'] == position_id]
+            else:
+                return f"Invalid position '{position}'. Use: goalkeeper, defender, midfielder, or forward"
+        
+        # Price filters
+        if min_price is not None:
+            filtered_players = filtered_players[filtered_players['now_cost'] >= min_price * 10]
+        if max_price is not None:
+            filtered_players = filtered_players[filtered_players['now_cost'] <= max_price * 10]
+        
+        # Minutes filter (to exclude bench players)
+        if min_minutes is not None:
+            filtered_players = filtered_players[filtered_players['minutes'] >= min_minutes]
+        
+        # Remove players with null values in the metric
+        filtered_players = filtered_players.dropna(subset=[metric])
+        
+        if filtered_players.empty:
+            return "No players found matching the specified criteria."
+        
+        # Sort by metric
+        sorted_players = filtered_players.sort_values(by=metric, ascending=ascending).head(limit)
+        
+        # Format results
+        result = f"Top {len(sorted_players)} players by {metric}:"
+        if position:
+            result += f" (Position: {position.title()})"
+        if min_price or max_price:
+            price_range = f" (Price: {min_price or 'any'}m - {max_price or 'any'}m)"
+            result += price_range
+        result += "\n\n"
+        
+        for i, (_, player) in enumerate(sorted_players.iterrows(), 1):
+            team_name = team_lookup.get(player['team'], 'Unknown')
+            position_name = position_names.get(player['element_type'], 'Unknown')
+            price = player['now_cost'] / 10
+            metric_value = player[metric]
+            
+            # Format metric value based on type
+            if isinstance(metric_value, float):
+                if metric_value < 1:
+                    metric_display = f"{metric_value:.3f}"
+                elif metric_value < 10:
+                    metric_display = f"{metric_value:.2f}"
+                else:
+                    metric_display = f"{metric_value:.1f}"
+            else:
+                metric_display = str(metric_value)
+            
+            result += f"{i:2d}. {player['web_name']} ({team_name}, {position_name}) - £{price:.1f}m\n"
+            result += f"    {metric}: {metric_display}"
+            
+            # Add context stats
+            if metric != 'total_points':
+                result += f" | Points: {player['total_points']}"
+            if metric != 'form':
+                form_val = pd.to_numeric(player['form'], errors='coerce')
+                if not pd.isna(form_val):
+                    result += f" | Form: {form_val:.1f}"
+            result += "\n\n"
+        
+        return result
+    except Exception as e:
+        return f"Error getting top players by metric: {str(e)}"
+
+
+@tool
+def get_player_fixtures(players: str, num_fixtures: int = 5) -> str:
+    """
+    Get fixture difficulty analysis for specific players by mapping them to their teams.
+
+    IMPORTANT: If you need fixtures for many players, send a comma seperated list of their names.
+    
+    Args:
+        players: Comma-separated list of player names or IDs
+        num_fixtures: Number of upcoming fixtures to analyze (default: 5)
+    
+    Returns:
+        String with each player's team, average fixture difficulty, and detailed fixture list
+    """
+    try:
+        # Get the project root directory
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(current_dir)
+        
+        # Construct absolute paths to data files
+        elements_path = os.path.join(project_root, 'fpl_data', 'fpl_data', 'elements.parquet')
+        fixtures_path = os.path.join(project_root, 'fpl_data', 'fpl_data', 'fixtures.parquet')
+        teams_path = os.path.join(project_root, 'fpl_data', 'fpl_data', 'teams.json')
+        
+        # Load player data
+        players_df = pd.read_parquet(
+            elements_path,
+            columns=['id', 'web_name', 'first_name', 'second_name', 'team', 'element_type']
+        )
+        
+        # Load fixtures data
+        fixtures_df = pd.read_parquet(
+            fixtures_path,
+            columns=['team_h', 'team_a', 'team_h_difficulty', 'team_a_difficulty', 'event', 'finished']
+        )
+        
+        # Load teams data for names
+        with open(teams_path, 'r') as f:
+            teams_data = json.load(f)
+        team_lookup = {team['id']: team['name'] for team in teams_data}
+        
+        # Add team names and positions
+        players_df['team_name'] = players_df['team'].map(team_lookup)
+        position_lookup = {1: 'GK', 2: 'DEF', 3: 'MID', 4: 'FWD'}
+        players_df['position'] = players_df['element_type'].map(position_lookup)
+        
+        # Parse input players (could be IDs or names)
+        player_inputs = [p.strip() for p in players.split(',')]
+        found_players = []
+        
+        for player_input in player_inputs:
+            player_input = player_input.strip()
+            if not player_input:
+                continue
+                
+            # Try to find by ID first
+            if player_input.isdigit():
+                player_id = int(player_input)
+                player_row = players_df[players_df['id'] == player_id]
+            else:
+                # Search by name (web_name, first_name, or second_name)
+                player_row = players_df[
+                    players_df['web_name'].str.contains(player_input, case=False, na=False) |
+                    players_df['first_name'].str.contains(player_input, case=False, na=False) |
+                    players_df['second_name'].str.contains(player_input, case=False, na=False)
+                ]
+            
+            if not player_row.empty:
+                # Take the first match if multiple found
+                found_players.append(player_row.iloc[0])
+            else:
+                found_players.append(None)  # Player not found
+        
+        if not any(p is not None for p in found_players):
+            return f"No players found matching: {players}"
+        
+        # Filter to unfinished fixtures and sort by event (gameweek)
+        upcoming_fixtures = fixtures_df[fixtures_df['finished'] == False].sort_values('event')
+        
+        # Format results
+        result_lines = []
+        result_lines.append(f"Player Fixture Analysis ({len([p for p in found_players if p is not None])} players, next {num_fixtures} fixtures):")
+        result_lines.append("")
+        
+        for i, (player_input, player_data) in enumerate(zip(player_inputs, found_players)):
+            if player_data is None:
+                result_lines.append(f"'{player_input}' - Player not found")
+                continue
+            
+            team_id = player_data['team']
+            team_name = player_data['team_name']
+            
+            # Calculate fixture difficulty for this player's team using same algorithm as get_easiest_fixtures
+            team_fixtures = []
+            
+            # Get all fixtures for this team (home and away) with event numbers
+            home_fixtures = upcoming_fixtures[upcoming_fixtures['team_h'] == team_id][['team_a', 'team_h_difficulty', 'event']].copy()
+            if not home_fixtures.empty:
+                home_fixtures['opponent'] = home_fixtures['team_a'].map(team_lookup)
+                home_fixtures['difficulty'] = home_fixtures['team_h_difficulty']
+                home_fixtures['venue'] = 'H'  # Home
+            
+            away_fixtures = upcoming_fixtures[upcoming_fixtures['team_a'] == team_id][['team_h', 'team_a_difficulty', 'event']].copy()
+            if not away_fixtures.empty:
+                away_fixtures['opponent'] = away_fixtures['team_h'].map(team_lookup)
+                away_fixtures['difficulty'] = away_fixtures['team_a_difficulty']
+                away_fixtures['venue'] = 'A'  # Away
+            
+            # Combine and sort by event (chronological order)
+            all_fixtures = []
+            if not home_fixtures.empty:
+                all_fixtures.append(home_fixtures[['opponent', 'difficulty', 'event', 'venue']])
+            if not away_fixtures.empty:
+                all_fixtures.append(away_fixtures[['opponent', 'difficulty', 'event', 'venue']])
+            
+            if all_fixtures:
+                combined_fixtures = pd.concat(all_fixtures).sort_values('event').head(num_fixtures)
+                
+                # Convert to list of tuples with venue info
+                fixture_list = []
+                for _, fixture in combined_fixtures.iterrows():
+                    fixture_list.append((
+                        fixture['opponent'], 
+                        fixture['difficulty'], 
+                        fixture['venue']
+                    ))
+                
+                if fixture_list:
+                    avg_difficulty = sum(f[1] for f in fixture_list) / len(fixture_list)
+                    
+                    # Player header
+                    result_lines.append(f"{player_data['web_name']} ({player_data['position']}) - {team_name}")
+                    result_lines.append(f"  Average Fixture Difficulty: {avg_difficulty:.1f}")
+                    result_lines.append(f"  Upcoming Fixtures:")
+                    
+                    for opponent, difficulty, venue in fixture_list:
+                        venue_text = "(H)" if venue == 'H' else "(A)"
+                        result_lines.append(f"    vs {opponent} {venue_text} - Difficulty: {difficulty}")
+                else:
+                    result_lines.append(f"{player_data['web_name']} ({player_data['position']}) - {team_name}")
+                    result_lines.append(f"  No upcoming fixtures found")
+            else:
+                result_lines.append(f"{player_data['web_name']} ({player_data['position']}) - {team_name}")
+                result_lines.append(f"  No upcoming fixtures found")
+            
+            # Add separator between players (except for last player)
+            if i < len(found_players) - 1:
+                result_lines.append("")
+        
+        # Clean the result for JSON safety
+        final_result = "\n".join(result_lines)
+        # Remove any problematic characters that could break JSON
+        final_result = final_result.replace('"', "'").replace('\\', '/').replace('\r', '').replace('\x00', '')
+        return final_result
         
     except Exception as e:
-        return f"Error searching players: {str(e)}"
+        error_msg = f"Error getting player fixtures: {str(e)}"
+        # Clean error message for JSON safety
+        return error_msg.replace('"', "'").replace('\\', '/').replace('\r', '').replace('\x00', '')
 
 @tool
 def get_player_form(players: str, detailed: bool = False) -> str:
     """
     Get form analysis for one or more players based on recent performance.
+
+    IMPORTANT: If you need the form for many players, only call this tool once and 
+    pass the player IDs or names as a comma-separated string.
     
     Args:
         players: Comma-separated player IDs or names (e.g., "381, Palmer, Haaland")
@@ -416,7 +1593,7 @@ def get_player_form(players: str, detailed: bool = False) -> str:
             price = player_data['now_cost'] / 10
             
             # Player header
-            result_lines.append(f"🔍 {player_data['web_name']} ({player_data['position']}) - {player_data['team_name']} (£{price:.1f}m)")
+            result_lines.append(f"{player_data['web_name']} ({player_data['position']}) - {player_data['team_name']} (£{price:.1f}m)")
             
             # Calculate 30-day form if current season data is available
             thirty_day_form = None
@@ -442,70 +1619,65 @@ def get_player_form(players: str, detailed: bool = False) -> str:
             # Display form analysis
             if thirty_day_form is not None:
                 if thirty_day_form >= 6:
-                    form_emoji = "🔥"
                     form_desc = "Excellent"
                 elif thirty_day_form >= 4:
-                    form_emoji = "⭐"
                     form_desc = "Good"
                 elif thirty_day_form >= 2:
-                    form_emoji = "📈"
                     form_desc = "Average"
                 else:
-                    form_emoji = "📉"
                     form_desc = "Poor"
                 
-                result_lines.append(f"   30-Day Form: {form_emoji} {thirty_day_form:.1f} points/game ({form_desc})")
+                result_lines.append(f"  30-Day Form: {thirty_day_form:.1f} points/game ({form_desc})")
             elif pd.notna(form) and form > 0:
                 # Fall back to 5-game form if available
                 if form >= 6:
-                    form_emoji = "🔥"
                     form_desc = "Excellent"
                 elif form >= 4:
-                    form_emoji = "⭐"
                     form_desc = "Good"
                 elif form >= 2:
-                    form_emoji = "📈"
                     form_desc = "Average"
                 else:
-                    form_emoji = "📉"
                     form_desc = "Poor"
                 
-                result_lines.append(f"   Recent Form (5 games): {form_emoji} {form:.1f} points/game ({form_desc})")
+                result_lines.append(f"  Recent Form: {form:.1f} points/game ({form_desc})")
             else:
-                result_lines.append(f"   Recent Form: ❓ No recent games or data unavailable")
+                result_lines.append(f"  Recent Form: No recent data available")
             
-            # Season performance
+            # Season performance (concise)
             if pd.notna(ppg) and ppg > 0:
-                result_lines.append(f"   Season Average: 📊 {ppg:.1f} points/game")
+                result_lines.append(f"  Season: {ppg:.1f} ppg, {total_points} total pts, {event_points} last GW")
             else:
-                result_lines.append(f"   Season Average: 📊 {total_points} total points")
-            
-            result_lines.append(f"   Total Season Points: 🎯 {total_points} points")
-            result_lines.append(f"   Last Gameweek: 🎲 {event_points} points")
-            result_lines.append(f"   Minutes Played: ⏱️ {minutes} minutes")
+                result_lines.append(f"  Season: {total_points} total pts, {event_points} last GW")
+            result_lines.append(f"  Minutes: {minutes}")
             
             # Historical comparison if detailed
             if detailed and history_df is not None:
                 player_history = history_df[history_df['player_id'] == player_data['id']]
                 if not player_history.empty:
-                    # Get last 3 seasons for context
-                    recent_seasons = player_history.sort_values('season_name', ascending=False).head(3)
+                    # Get last 2 seasons for context (reduced from 3)
+                    recent_seasons = player_history.sort_values('season_name', ascending=False).head(2)
                     
-                    result_lines.append(f"   📈 Historical Performance:")
+                    result_lines.append(f"  Historical:")
                     for _, season in recent_seasons.iterrows():
-                        season_ppg = season['total_points'] / 38 if season['total_points'] > 0 else 0  # Assume 38 gameweeks
-                        result_lines.append(f"      {season['season_name']}: {season['total_points']} pts ({season_ppg:.1f} ppg)")
+                        season_ppg = season['total_points'] / 38 if season['total_points'] > 0 else 0
+                        result_lines.append(f"    {season['season_name']}: {season['total_points']} pts ({season_ppg:.1f} ppg)")
                 else:
-                    result_lines.append(f"   📈 Historical Performance: No previous season data")
+                    result_lines.append(f"  Historical: No previous data")
             
             # Add separator between players (except for last player)
             if i < len(found_players) - 1:
                 result_lines.append("")
         
-        return "\n".join(result_lines)
+        # Clean the result for JSON safety
+        final_result = "\n".join(result_lines)
+        # Remove any problematic characters that could break JSON
+        final_result = final_result.replace('"', "'").replace('\\', '/').replace('\r', '').replace('\x00', '')
+        return final_result
         
     except Exception as e:
-        return f"Error getting player form: {str(e)}"
+        error_msg = f"Error getting player form: {str(e)}"
+        # Clean error message for JSON safety
+        return error_msg.replace('"', "'").replace('\\', '/').replace('\r', '').replace('\x00', '')
 
 def get_player_photos(player_names, size="large"):
     """

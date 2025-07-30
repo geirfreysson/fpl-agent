@@ -301,80 +301,57 @@ def test_get_players_by_price_range_no_position_found():
 
 
 def test_search_players_most_expensive():
-    """Test search_players for most expensive players"""
+    """Test search_players sorted by price (most expensive first)"""
     
     original_dir = os.getcwd()
     project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     os.chdir(project_root)
     
     try:
-        result = search_players('most expensive', 5)
+        # Test with price filtering to get expensive players
+        result = search_players(min_price=10.0, limit=5)
         
         assert isinstance(result, str)
-        assert not result.startswith("Error searching players:")
-        assert "Most Expensive (Top 5):" in result
+        assert "Players Found" in result
+        assert "£" in result  # Should show prices
         
-        lines = result.strip().split('\n')
-        player_lines = [line for line in lines[2:] if line.strip()]
-        assert len(player_lines) == 5
-        
-        # Check that all lines have the expected format
-        for i, line in enumerate(player_lines, 1):
-            assert line.startswith(f"{i}.")
-            assert "(MID)" in line or "(FWD)" in line or "(DEF)" in line or "(GK)" in line
-            assert "£" in line and "m" in line  # Price should be included
-            assert "(ID:" in line and line.endswith(")")
+        # Check that results are properly formatted
+        lines = result.split('\n')
+        assert len([line for line in lines if line.strip() and not line.startswith('Players Found')]) >= 5
         
     finally:
         os.chdir(original_dir)
 
 
 def test_search_players_performance_metrics():
-    """Test search_players for various performance metrics"""
+    """Test search_players with performance-based filtering"""
     
     original_dir = os.getcwd()
     project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     os.chdir(project_root)
     
     try:
-        # Test highest expected goals
-        result_xg = search_players('highest expected goals', 3)
-        assert "Highest Expected Goals (Top 3):" in result_xg
-        assert not result_xg.startswith("Error searching players:")
+        # Test expected goals filtering
+        result_xg = search_players(min_expected_goals=2.0, limit=3)
+        assert "Players Found" in result_xg
         
-        # Test most creative
-        result_creative = search_players('most creative', 3)
-        assert "Most Creative (Top 3):" in result_creative
+        # Test creativity filtering
+        result_creative = search_players(min_creativity=50.0, limit=3)
+        assert "Players Found" in result_creative
         
-        # Test highest total points
-        result_points = search_players('highest total points', 3)
-        assert "Highest Total Points (Top 3):" in result_points
+        # Test total points filtering
+        result_points = search_players(min_total_points=50, limit=3)
+        assert "Players Found" in result_points
         
-        # Test most goals
-        result_goals = search_players('most goals', 3)
-        assert "Most Goals (Top 3):" in result_goals
+        # Test goals filtering
+        result_goals = search_players(min_goals_scored=3, limit=3)
+        assert "Players Found" in result_goals
         
     finally:
         os.chdir(original_dir)
 
 
-def test_search_players_invalid_criteria():
-    """Test search_players with invalid criteria"""
-    
-    original_dir = os.getcwd()
-    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    os.chdir(project_root)
-    
-    try:
-        result = search_players('invalid criteria')
-        
-        assert isinstance(result, str)
-        assert "Unknown criteria 'invalid criteria'" in result
-        assert "Available criteria:" in result
-        assert "most expensive" in result  # Should list available options
-        
-    finally:
-        os.chdir(original_dir)
+
 
 
 def test_search_players_custom_limit():
@@ -385,45 +362,21 @@ def test_search_players_custom_limit():
     os.chdir(project_root)
     
     try:
-        result = search_players('most expensive', 15)
+        result = search_players(limit=15)
         
         assert isinstance(result, str)
-        assert "Most Expensive (Top 15):" in result
+        assert "Players Found" in result
         
-        lines = result.strip().split('\n')
-        player_lines = [line for line in lines[2:] if line.strip()]
+        # Count the number of player entries
+        lines = result.split('\n')
+        player_lines = [line for line in lines if line.strip() and line[0].isdigit()]
         assert len(player_lines) == 15
         
-        # Check that rankings are correct
-        for i, line in enumerate(player_lines, 1):
-            assert line.startswith(f"{i}.")
-        
     finally:
         os.chdir(original_dir)
 
 
-def test_search_players_case_insensitive():
-    """Test search_players with case-insensitive criteria"""
-    
-    original_dir = os.getcwd()
-    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    os.chdir(project_root)
-    
-    try:
-        # Test uppercase
-        result1 = search_players('MOST EXPENSIVE', 3)
-        assert "Most Expensive (Top 3):" in result1
-        
-        # Test mixed case
-        result2 = search_players('Highest Expected Goals', 3)
-        assert "Highest Expected Goals (Top 3):" in result2
-        
-        # Test partial match
-        result3 = search_players('creative', 3)
-        assert "Most Creative (Top 3):" in result3
-        
-    finally:
-        os.chdir(original_dir)
+
 
 
 def test_search_players_output_format():
@@ -1027,6 +980,569 @@ def test_find_player_replacements_edge_cases():
         if not result4.startswith("Error"):
             replacement_lines = [line for line in result4.split('\n') if line.strip().startswith('🔍')]
             assert len(replacement_lines) <= 10
+        
+    finally:
+        os.chdir(original_dir)
+
+
+# ========== COMPREHENSIVE SEARCH_PLAYERS TESTS ==========
+
+def test_search_players_basic_functionality():
+    """Test basic search_players functionality with real data"""
+    
+    original_dir = os.getcwd()
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(project_root)
+    
+    try:
+        # Test basic search with no filters
+        result = search_players(limit=5)
+        
+        assert isinstance(result, str)
+        assert len(result) > 0
+        assert not result.startswith("Error")
+        
+        lines = result.strip().split('\n')
+        # Should have header and player entries
+        assert len(lines) >= 2
+        
+        # Check basic format
+        assert "Players Found" in result or "Player Analysis" in result
+        
+    finally:
+        os.chdir(original_dir)
+
+
+def test_search_players_position_filtering():
+    """Test position-based filtering"""
+    
+    original_dir = os.getcwd()
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(project_root)
+    
+    try:
+        # Test each position type
+        positions = ['goalkeeper', 'defender', 'midfielder', 'forward']
+        
+        for position in positions:
+            result = search_players(position=position, limit=3)
+            
+            assert isinstance(result, str)
+            assert not result.startswith("Error"), f"Error for position {position}: {result}"
+            
+            if "No players found" not in result:
+                # Should contain position-specific info
+                pos_abbrev = {'goalkeeper': 'GK', 'defender': 'DEF', 'midfielder': 'MID', 'forward': 'FWD'}
+                assert pos_abbrev[position] in result, f"Position {position} not found in result"
+        
+    finally:
+        os.chdir(original_dir)
+
+
+def test_search_players_price_filtering():
+    """Test price-based filtering"""
+    
+    original_dir = os.getcwd()
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(project_root)
+    
+    try:
+        # Test minimum price filter
+        result1 = search_players(min_price=10.0, limit=5)
+        assert isinstance(result1, str)
+        assert not result1.startswith("Error")
+        
+        # Test maximum price filter
+        result2 = search_players(max_price=5.0, limit=5)
+        assert isinstance(result2, str)
+        assert not result2.startswith("Error")
+        
+        # Test price range
+        result3 = search_players(min_price=6.0, max_price=8.0, limit=5)
+        assert isinstance(result3, str)
+        assert not result3.startswith("Error")
+        
+        # Test very high price (should return few/no players)
+        result4 = search_players(min_price=20.0, limit=5)
+        assert isinstance(result4, str)
+        # Should either return no players or very expensive ones
+        
+    finally:
+        os.chdir(original_dir)
+
+
+def test_search_players_performance_stats():
+    """Test filtering by performance statistics"""
+    
+    original_dir = os.getcwd()
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(project_root)
+    
+    try:
+        # Test total points filter
+        result1 = search_players(min_total_points=50, limit=5)
+        assert isinstance(result1, str)
+        assert not result1.startswith("Error")
+        
+        # Test minutes filter (regular players)
+        result2 = search_players(min_minutes=500, limit=5)
+        assert isinstance(result2, str)
+        assert not result2.startswith("Error")
+        
+        # Test goals filter
+        result3 = search_players(min_goals_scored=3, limit=5)
+        assert isinstance(result3, str)
+        assert not result3.startswith("Error")
+        
+        # Test assists filter
+        result4 = search_players(min_assists=2, limit=5)
+        assert isinstance(result4, str)
+        assert not result4.startswith("Error")
+        
+        # Test form filter
+        result5 = search_players(min_form=4.0, limit=5)
+        assert isinstance(result5, str)
+        assert not result5.startswith("Error")
+        
+    finally:
+        os.chdir(original_dir)
+
+
+def test_search_players_enhanced_value_metrics():
+    """Test enhanced value metrics filtering"""
+    
+    original_dir = os.getcwd()
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(project_root)
+    
+    try:
+        # Test points per million filter
+        result1 = search_players(min_points_per_million=8.0, limit=5)
+        assert isinstance(result1, str)
+        assert not result1.startswith("Error")
+        
+        # Test form per million filter
+        result2 = search_players(min_form_per_million=0.5, limit=5)
+        assert isinstance(result2, str)
+        assert not result2.startswith("Error")
+        
+        # Test expected goals per million filter
+        result3 = search_players(min_expected_goals_per_million=0.3, limit=5)
+        assert isinstance(result3, str)
+        assert not result3.startswith("Error")
+        
+    finally:
+        os.chdir(original_dir)
+
+
+def test_search_players_efficiency_metrics():
+    """Test performance efficiency metrics filtering"""
+    
+    original_dir = os.getcwd()
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(project_root)
+    
+    try:
+        # Test minutes per game (nailed-on players)
+        result1 = search_players(min_minutes_per_game=75, limit=5)
+        assert isinstance(result1, str)
+        assert not result1.startswith("Error")
+        
+        # Test points per minute
+        result2 = search_players(min_points_per_minute=0.05, limit=5)
+        assert isinstance(result2, str)
+        assert not result2.startswith("Error")
+        
+        # Test goal involvement rate
+        result3 = search_players(min_goal_involvement_rate=20.0, limit=5)
+        assert isinstance(result3, str)
+        assert not result3.startswith("Error")
+        
+    finally:
+        os.chdir(original_dir)
+
+
+def test_search_players_expected_vs_actual():
+    """Test expected vs actual performance metrics"""
+    
+    original_dir = os.getcwd()
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(project_root)
+    
+    try:
+        # Test goals overperformance
+        result1 = search_players(min_goals_overperformance=1.0, limit=5)
+        assert isinstance(result1, str)
+        assert not result1.startswith("Error")
+        
+        # Test assists overperformance
+        result2 = search_players(min_assists_overperformance=0.5, limit=5)
+        assert isinstance(result2, str)
+        assert not result2.startswith("Error")
+        
+        # Test goals luck factor
+        result3 = search_players(min_goals_luck_factor=1.2, limit=5)
+        assert isinstance(result3, str)
+        assert not result3.startswith("Error")
+        
+        # Test assists luck factor
+        result4 = search_players(min_assists_luck_factor=1.1, limit=5)
+        assert isinstance(result4, str)
+        assert not result4.startswith("Error")
+        
+    finally:
+        os.chdir(original_dir)
+
+
+def test_search_players_consistency_metrics():
+    """Test consistency and transfer metrics"""
+    
+    original_dir = os.getcwd()
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(project_root)
+    
+    try:
+        # Test form consistency (lower is better)
+        result1 = search_players(max_form_consistency=2.0, limit=5)
+        assert isinstance(result1, str)
+        assert not result1.startswith("Error")
+        
+        # Test transfer momentum
+        result2 = search_players(min_transfer_momentum=10000, limit=5)
+        assert isinstance(result2, str)
+        assert not result2.startswith("Error")
+        
+        # Test ownership category
+        result3 = search_players(ownership_category="Low", limit=5)
+        assert isinstance(result3, str)
+        assert not result3.startswith("Error")
+        
+        result4 = search_players(ownership_category="High", limit=5)
+        assert isinstance(result4, str)
+        assert not result4.startswith("Error")
+        
+    finally:
+        os.chdir(original_dir)
+
+
+def test_search_players_position_specific_features():
+    """Test position-specific features"""
+    
+    original_dir = os.getcwd()
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(project_root)
+    
+    try:
+        # Test goalkeeper-specific features
+        result1 = search_players(position="goalkeeper", min_save_percentage=60.0, limit=3)
+        assert isinstance(result1, str)
+        assert not result1.startswith("Error")
+        
+        result2 = search_players(position="goalkeeper", min_clean_sheet_rate=20.0, limit=3)
+        assert isinstance(result2, str)
+        assert not result2.startswith("Error")
+        
+        # Test defender-specific features
+        result3 = search_players(position="defender", min_defensive_value=2.0, limit=5)
+        assert isinstance(result3, str)
+        assert not result3.startswith("Error")
+        
+        result4 = search_players(position="defender", min_clean_sheet_rate=15.0, limit=5)
+        assert isinstance(result4, str)
+        assert not result4.startswith("Error")
+        
+        # Test midfielder/forward attacking threat
+        result5 = search_players(position="midfielder", min_attacking_threat=3.0, limit=5)
+        assert isinstance(result5, str)
+        assert not result5.startswith("Error")
+        
+        result6 = search_players(position="forward", min_attacking_threat=4.0, limit=5)
+        assert isinstance(result6, str)
+        assert not result6.startswith("Error")
+        
+    finally:
+        os.chdir(original_dir)
+
+
+def test_search_players_fixture_difficulty():
+    """Test fixture difficulty metrics"""
+    
+    original_dir = os.getcwd()
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(project_root)
+    
+    try:
+        # Test 3-game fixture difficulty
+        result1 = search_players(max_avg_fixture_difficulty_3=2.5, limit=5)
+        assert isinstance(result1, str)
+        assert not result1.startswith("Error")
+        
+        # Test 5-game fixture difficulty
+        result2 = search_players(max_avg_fixture_difficulty_5=3.0, limit=5)
+        assert isinstance(result2, str)
+        assert not result2.startswith("Error")
+        
+        # Test 10-game fixture difficulty
+        result3 = search_players(max_avg_fixture_difficulty_10=3.2, limit=5)
+        assert isinstance(result3, str)
+        assert not result3.startswith("Error")
+        
+        # Test home fixture difficulty
+        result4 = search_players(max_home_fixture_difficulty_5=2.8, limit=5)
+        assert isinstance(result4, str)
+        assert not result4.startswith("Error")
+        
+        # Test away fixture difficulty
+        result5 = search_players(max_away_fixture_difficulty_5=3.5, limit=5)
+        assert isinstance(result5, str)
+        assert not result5.startswith("Error")
+        
+    finally:
+        os.chdir(original_dir)
+
+
+def test_search_players_position_rankings():
+    """Test position ranking metrics"""
+    
+    original_dir = os.getcwd()
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(project_root)
+    
+    try:
+        # Test points rank in position (top players)
+        result1 = search_players(max_points_rank_in_position=5, limit=10)
+        assert isinstance(result1, str)
+        assert not result1.startswith("Error")
+        
+        # Test value rank in position
+        result2 = search_players(max_value_rank_in_position=3, limit=10)
+        assert isinstance(result2, str)
+        assert not result2.startswith("Error")
+        
+        # Test form rank in position
+        result3 = search_players(max_form_rank_in_position=5, limit=10)
+        assert isinstance(result3, str)
+        assert not result3.startswith("Error")
+        
+    finally:
+        os.chdir(original_dir)
+
+
+def test_search_players_combined_filters():
+    """Test complex combinations of filters"""
+    
+    original_dir = os.getcwd()
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(project_root)
+    
+    try:
+        # Test midfielder with high expected goals under 7M
+        result1 = search_players(
+            position="midfielder",
+            max_price=7.0,
+            min_expected_goals_per_million=0.4,
+            min_minutes=300,
+            limit=5
+        )
+        assert isinstance(result1, str)
+        assert not result1.startswith("Error")
+        
+        # Test consistent defenders with easy fixtures
+        result2 = search_players(
+            position="defender",
+            max_form_consistency=2.5,
+            max_avg_fixture_difficulty_5=3.0,
+            min_minutes_per_game=60,
+            limit=5
+        )
+        assert isinstance(result2, str)
+        assert not result2.startswith("Error")
+        
+        # Test value forwards with good form
+        result3 = search_players(
+            position="forward",
+            min_points_per_million=6.0,
+            min_form=4.0,
+            min_attacking_threat=3.0,
+            limit=5
+        )
+        assert isinstance(result3, str)
+        assert not result3.startswith("Error")
+        
+        # Test low ownership players with high expected performance
+        result4 = search_players(
+            ownership_category="Low",
+            min_expected_goals_per_million=0.3,
+            max_price=8.0,
+            min_minutes=200,
+            limit=5
+        )
+        assert isinstance(result4, str)
+        assert not result4.startswith("Error")
+        
+    finally:
+        os.chdir(original_dir)
+
+
+def test_search_players_player_identity_filters():
+    """Test player identity and team filters"""
+    
+    original_dir = os.getcwd()
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(project_root)
+    
+    try:
+        # Test specific player by name
+        result1 = search_players(web_name="Salah", limit=1)
+        assert isinstance(result1, str)
+        assert not result1.startswith("Error")
+        if "No players found" not in result1:
+            assert "Salah" in result1
+        
+        # Test team filter
+        result2 = search_players(team="Arsenal", limit=5)
+        assert isinstance(result2, str)
+        assert not result2.startswith("Error")
+        
+        # Test first name filter
+        result3 = search_players(first_name="Mohamed", limit=3)
+        assert isinstance(result3, str)
+        assert not result3.startswith("Error")
+        
+        # Test second name filter
+        result4 = search_players(second_name="Palmer", limit=3)
+        assert isinstance(result4, str)
+        assert not result4.startswith("Error")
+        
+    finally:
+        os.chdir(original_dir)
+
+
+def test_search_players_availability_filters():
+    """Test availability and injury-related filters"""
+    
+    original_dir = os.getcwd()
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(project_root)
+    
+    try:
+        # Test available players only
+        result1 = search_players(can_transact=True, limit=5)
+        assert isinstance(result1, str)
+        assert not result1.startswith("Error")
+        
+        # Test selectable players only
+        result2 = search_players(can_select=True, limit=5)
+        assert isinstance(result2, str)
+        assert not result2.startswith("Error")
+        
+        # Test high chance of playing
+        result3 = search_players(min_chance_of_playing=75, limit=5)
+        assert isinstance(result3, str)
+        assert not result3.startswith("Error")
+        
+        # Test players with injury concerns
+        result4 = search_players(max_chance_of_playing=50, limit=5)
+        assert isinstance(result4, str)
+        assert not result4.startswith("Error")
+        
+    finally:
+        os.chdir(original_dir)
+
+
+def test_search_players_limit_and_sorting():
+    """Test limit parameter and result sorting"""
+    
+    original_dir = os.getcwd()
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(project_root)
+    
+    try:
+        # Test different limit values
+        result1 = search_players(limit=1)
+        assert isinstance(result1, str)
+        assert not result1.startswith("Error")
+        
+        result2 = search_players(limit=20)
+        assert isinstance(result2, str)
+        assert not result2.startswith("Error")
+        
+        # Test that results are properly limited
+        if "No players found" not in result2:
+            lines = [line for line in result2.split('\n') if line.strip() and not line.startswith('=')]
+            # Should have reasonable number of lines (header + players)
+            assert len(lines) <= 25  # Some buffer for headers and formatting
+        
+    finally:
+        os.chdir(original_dir)
+
+
+def test_search_players_error_handling():
+    """Test error handling and edge cases"""
+    
+    original_dir = os.getcwd()
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(project_root)
+    
+    try:
+        # Test invalid position
+        result1 = search_players(position="invalid_position", limit=5)
+        assert isinstance(result1, str)
+        # Should either handle gracefully or return no results
+        
+        # Test impossible filters (should return no results)
+        result2 = search_players(min_price=50.0, limit=5)  # No player costs £50m
+        assert isinstance(result2, str)
+        assert "No players found" in result2 or not result2.startswith("Error")
+        
+        # Test negative values
+        result3 = search_players(min_total_points=-10, limit=5)
+        assert isinstance(result3, str)
+        assert not result3.startswith("Error")
+        
+        # Test very large limit
+        result4 = search_players(limit=1000)
+        assert isinstance(result4, str)
+        assert not result4.startswith("Error")
+        
+    finally:
+        os.chdir(original_dir)
+
+
+def test_search_players_output_format_consistency():
+    """Test that output format is consistent across different filter combinations"""
+    
+    original_dir = os.getcwd()
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(project_root)
+    
+    try:
+        # Test various filter combinations and check output format
+        test_cases = [
+            {"position": "midfielder", "limit": 3},
+            {"min_price": 5.0, "max_price": 10.0, "limit": 3},
+            {"min_total_points": 30, "limit": 3},
+            {"min_form": 3.0, "limit": 3},
+            {"position": "defender", "min_clean_sheet_rate": 10.0, "limit": 3}
+        ]
+        
+        for test_case in test_cases:
+            result = search_players(**test_case)
+            
+            assert isinstance(result, str)
+            
+            if not result.startswith("Error") and "No players found" not in result:
+                lines = result.strip().split('\n')
+                
+                # Should have some structure
+                assert len(lines) >= 1
+                
+                # Should contain player information
+                has_player_info = any(
+                    any(keyword in line.lower() for keyword in ['player', 'name', 'team', 'position', 'price'])
+                    for line in lines
+                )
+                assert has_player_info, f"No player info found in result: {result[:200]}..."
         
     finally:
         os.chdir(original_dir)

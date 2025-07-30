@@ -4,10 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a full-stack AI assistant application template using the assistant-ui library. It consists of:
+This is a full-stack Fantasy Premier League (FPL) AI assistant application. It consists of:
 
 - **Frontend**: Next.js 15 application with React 19, TypeScript, and Tailwind CSS
-- **Backend**: Python backend (separate service) that handles AI chat processing
+- **Backend**: Python backend with specialized FPL analysis tools
+- **Data Processing**: Automated FPL data pipeline from official API
 - **Architecture**: Frontend serves as a proxy to the Python backend via `/api/chat` route
 
 ## Development Commands
@@ -53,8 +54,13 @@ export OPENAI_API_KEY=sk-your-key-here
 - `main.py` - Entry point, starts uvicorn server on port 8000
 - `api.py` - FastAPI application with CORS middleware and `/api/chat` endpoint
 - `agents.py` - Creates ToolCallingAgent using smolagents library
-- `tools.py` - Defines custom tools for the agent (e.g., weather tool)
+- `tools.py` - Comprehensive FPL analysis tools with 28+ enhanced features
 - `tests/` - Backend test suite
+
+### FPL Data Structure
+- `fpl_data/` - Directory containing processed FPL data files
+- `fpl_data/process_fpl_data.py` - Data processing script that fetches and normalizes FPL data
+- `fpl_data/DATA_STRUCTURE.md` - Comprehensive documentation of all data files and schemas
 
 ### Backend Integration
 - Frontend makes POST requests to `/api/chat`
@@ -82,17 +88,26 @@ export OPENAI_API_KEY=sk-your-key-here
 ## Development Notes
 
 ### Backend Implementation
-- Backend uses smolagents ToolCallingAgent with configurable tools
-- Default includes a weather tool that returns mock data
+- Backend uses smolagents ToolCallingAgent with specialized FPL analysis tools
+- Includes comprehensive FPL data analysis capabilities with 28+ enhanced features
 - Agent responses are streamed using FastAPI's StreamingResponse
 - CORS is configured to allow requests from frontend (localhost:3000)
 - Request/response format is compatible with assistant-ui expectations
 
+### FPL Data Analysis Features
+- **Player Search**: Advanced filtering with 50+ parameters including enhanced metrics
+- **Performance Analysis**: Expected vs actual performance metrics, consistency analysis
+- **Value Analysis**: Points per million, form per million, efficiency metrics
+- **Fixture Difficulty**: Forward-looking analysis (3, 5, 10 gameweek horizons)
+- **Position-Specific**: Tailored metrics for GK, DEF, MID, FWD positions
+- **Transfer Trends**: Ownership categories, transfer momentum analysis
+- **Ranking Systems**: Position-based rankings for points, value, and form
+
 ### Integration Flow
 1. Frontend sends user messages via `/api/chat` route
 2. Next.js API route forwards to Python backend at `/api/chat`
-3. Backend creates agent instance and processes message
-4. Agent can call tools (like weather lookup) during processing
+3. Backend creates agent instance and processes FPL-related queries
+4. Agent can call specialized FPL tools for data analysis, player searches, etc.
 5. Response is streamed back through the frontend proxy
 6. Frontend renders streaming response in assistant-ui interface
 
@@ -101,6 +116,33 @@ To extend the backend with new capabilities:
 1. Define new tool functions in `tools.py` using `@tool` decorator
 2. Import and add to tools list in `agents.py`
 3. Agent will automatically have access to new tools
+
+### FPL Data Files Structure
+The application uses 5 main data files (updated automatically by `process_fpl_data.py`):
+
+1. **`elements.parquet`** (663 players, 97+ columns):
+   - Player basic info, current season stats, enhanced derived features
+   - Value metrics: points_per_million, form_per_million, points_per_minute
+   - Performance analysis: goals_overperformance, assists_overperformance, luck_factors
+   - Fixture difficulty: avg_fixture_difficulty_3/5/10, home/away splits
+   - Position rankings: points_rank_in_position, value_rank_in_position
+
+2. **`fixtures.parquet`** (380 fixtures, 17 columns):
+   - Match fixtures, kickoff times, difficulty ratings, scores
+
+3. **`player_fixtures.parquet`** (1,900 records, 15 columns):
+   - Player-specific fixture data with home/away flags, difficulty ratings
+
+4. **`player_history_past.parquet`** (239 records, 29 columns):
+   - Historical season performance data for trend analysis
+
+5. **`teams.json`** (20 teams):
+   - Team info, strength ratings, league positions
+
+### Key Data Relationships
+- `elements.id` ↔ `player_fixtures.player_id` ↔ `player_history_past.player_id`
+- `elements.team` ↔ `teams[].id` (team lookup)
+- `fixtures.team_h/team_a` ↔ `teams[].id` (team lookup)
 
 - Frontend expects backend to be running on port 8000
 - All API communication flows through the Next.js API route for proper CORS handling
