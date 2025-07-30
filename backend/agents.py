@@ -1,6 +1,6 @@
 from smolagents import ToolCallingAgent, LiteLLMModel
 from smolagents.memory import TaskStep, ActionStep, SystemPromptStep, Timing
-from tools import help, get_weather, get_easiest_fixtures, get_players_by_price_range, search_players, get_top_players_by_metric, get_player_form, get_player_fixtures, find_player_replacements
+from tools import help, get_weather, get_easiest_fixtures, get_players_by_price_range, search_players, get_player_form, get_player_fixtures, find_player_replacements
 from memory import convert_conversation_to_memory_steps
 import os
 from typing import List, Dict, Any
@@ -21,7 +21,7 @@ def create_agent(conversation_history: List[Dict[str, Any]] = None):
     
 
     agent = ToolCallingAgent(
-        tools=[help, get_weather, get_easiest_fixtures, get_players_by_price_range, search_players, get_top_players_by_metric, get_player_form, get_player_fixtures, find_player_replacements],
+        tools=[help, get_weather, get_easiest_fixtures, get_players_by_price_range, search_players, get_player_form, get_player_fixtures, find_player_replacements],
         model=model,
         stream_outputs=True,  # Enable streaming to get ToolCall/ToolOutput events
         instructions="All lists should be displayed as markdown tables for an extra prize"

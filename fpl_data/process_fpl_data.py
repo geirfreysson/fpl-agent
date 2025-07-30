@@ -169,6 +169,64 @@ def add_derived_features(df, fixtures_df=None, teams_data=None):
             df.loc[pos_mask, 'value_rank_in_position'] = df.loc[pos_mask, 'points_per_million'].rank(ascending=False)
             df.loc[pos_mask, 'form_rank_in_position'] = df.loc[pos_mask, 'form'].rank(ascending=False)
     
+    # === HIGH-VALUE FPL FEATURES ===
+    print("Adding high-value FPL features...")
+    
+    # Per-90 minute stats (rate stats for rotation players)
+    df['goals_per_90'] = np.where(df['minutes'] > 0, (df['goals_scored'] / df['minutes']) * 90, 0)
+    df['assists_per_90'] = np.where(df['minutes'] > 0, (df['assists'] / df['minutes']) * 90, 0)
+    df['goal_involvements_per_90'] = df['goals_per_90'] + df['assists_per_90']
+    
+    # Captain potential score (combination of ceiling and consistency)
+    # High total points (ceiling) + low form variance (consistency) + minutes reliability
+    df['captain_potential'] = (
+        (df['total_points'] / df['total_points'].max() * 0.4) +  # 40% ceiling
+        (df['form_consistency'] * 0.3) +  # 30% consistency  
+        (np.minimum(df['minutes_per_game'] / 90, 1) * 0.2) +  # 20% reliability
+        (df['bonus'] / df['bonus'].max() * 0.1)  # 10% bonus potential
+    )
+    
+    # Set piece taker flags (heuristic-based on key stats)
+    # Note: These are educated guesses based on player stats since FPL API doesn't provide direct flags
+    
+    # Penalty takers: High penalty conversion rate indicators
+    # Players with goals but low expected goals might be penalty takers
+    df['penalty_potential'] = np.where(
+        (df['goals_scored'] > 0) & (df['expected_goals'] > 0),
+        df['goals_scored'] / df['expected_goals'],
+        0
+    )
+    df['is_penalty_taker'] = (
+        (df['penalty_potential'] > 1.5) & 
+        (df['goals_scored'] >= 3) &
+        (df['minutes'] >= 500)  # Must have significant playing time
+    )
+    
+    # Corner takers: High assists with good creativity stats
+    df['corner_potential'] = np.where(
+        (df['creativity'] > 0) & (df['assists'] > 0),
+        (df['assists'] * df['creativity']) / 100,  # Normalize creativity
+        0
+    )
+    df['is_corner_taker'] = (
+        (df['corner_potential'] > df['corner_potential'].quantile(0.85)) &
+        (df['assists'] >= 2) &
+        (df['minutes'] >= 500)
+    )
+    
+    # Free kick takers: High threat + goals from outside box indicators
+    # Players with high threat but lower expected goals might take free kicks
+    df['freekick_potential'] = np.where(
+        (df['threat'] > 0) & (df['goals_scored'] > 0),
+        (df['threat'] * df['goals_scored']) / 100,  # Normalize threat
+        0
+    )
+    df['is_freekick_taker'] = (
+        (df['freekick_potential'] > df['freekick_potential'].quantile(0.8)) &
+        (df['goals_scored'] >= 2) &
+        (df['minutes'] >= 500)
+    )
+    
     print(f"Added {len([col for col in df.columns if col not in numeric_cols + ['id', 'web_name', 'first_name', 'second_name']])} derived features")
     return df
 

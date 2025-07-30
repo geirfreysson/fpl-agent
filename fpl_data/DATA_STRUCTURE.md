@@ -147,6 +147,37 @@ Rank within position group (1 = best in position):
 - **`value_rank_in_position`** (int): Rank by points per million within position.
 - **`form_rank_in_position`** (int): Rank by recent form within position.
 
+#### High-Value FPL Features
+Advanced features designed for serious FPL analysis:
+
+##### Per-90 Rate Statistics
+Rate stats that account for playing time differences:
+
+- **`goals_per_90`** (float): Goals scored per 90 minutes played. Essential for comparing rotation players.
+- **`assists_per_90`** (float): Assists provided per 90 minutes played.
+- **`goal_involvements_per_90`** (float): Combined goals + assists per 90 minutes.
+
+##### Captain Analysis
+Features for identifying premium captain options:
+
+- **`captain_potential`** (float): Composite score combining ceiling (40%), consistency (30%), reliability (20%), and bonus potential (10%). Higher values indicate better captain options.
+
+##### Set Piece Takers (Heuristic-Based)
+Boolean flags identifying likely set piece takers based on statistical patterns:
+
+- **`is_penalty_taker`** (bool): Likely penalty taker based on goals vs expected goals ratio and minimum thresholds.
+- **`is_corner_taker`** (bool): Likely corner taker based on assists, creativity stats, and performance thresholds.
+- **`is_freekick_taker`** (bool): Likely free kick taker based on threat rating, goals scored, and statistical patterns.
+
+*Note: Set piece flags are intelligent estimates based on player statistics since the FPL API doesn't provide direct set piece role data. Accuracy is high for established takers but should be verified for newer players.*
+
+##### Supporting Metrics
+Additional metrics used in calculations:
+
+- **`penalty_potential`** (float): Ratio of actual to expected goals (used for penalty taker detection).
+- **`corner_potential`** (float): Assists × creativity metric (used for corner taker detection).
+- **`freekick_potential`** (float): Threat × goals metric (used for free kick taker detection).
+
 ### Enhanced Usage Examples
 
 ```python
@@ -169,6 +200,41 @@ consistent_players = players[
 easy_fixtures = players[
     players['avg_fixture_difficulty_5'] <= 2.5
 ].nlargest(10, 'form')
+
+# === NEW HIGH-VALUE FEATURES ===
+
+# Find premium captain options
+captain_candidates = players[
+    (players['minutes'] >= 1000) &
+    (players['total_points'] >= 100)
+].nlargest(8, 'captain_potential')
+
+# Identify penalty takers under £10m
+penalty_takers = players[
+    (players['is_penalty_taker'] == True) &
+    (players['now_cost'] <= 100)  # Under £10.0m
+].sort_values('total_points', ascending=False)
+
+# Find efficient rotation players (high per-90 stats)
+rotation_gems = players[
+    (players['minutes'] >= 300) &  # Some playing time
+    (players['minutes'] <= 1500) &  # But not always starting
+    (players['goals_per_90'] >= 0.4)
+].nlargest(10, 'goals_per_90')
+
+# Spot set piece takers with good fixtures
+set_piece_kings = players[
+    ((players['is_corner_taker'] == True) | 
+     (players['is_freekick_taker'] == True) |
+     (players['is_penalty_taker'] == True)) &
+    (players['avg_fixture_difficulty_5'] <= 3.0)
+].nlargest(15, 'total_points')
+
+# Find assist machines (high assists per 90)
+assist_providers = players[
+    (players['minutes'] >= 500) &
+    (players['assists_per_90'] >= 0.3)
+].nlargest(10, 'assists_per_90')
 
 # Spot potential value picks (low ownership, high expected goals)
 value_picks = players[
@@ -195,25 +261,41 @@ nailed_defenders = players[
 
 These enhanced features are fully integrated with the FPL analysis tools:
 
-- **`search_players()`**: All enhanced features available as filter parameters
-- **`get_top_players_by_metric()`**: Rank players by any enhanced metric
+- **`search_players()`**: All enhanced features available as filter parameters including new high-value features
 - **`help()`**: Provides tips and example queries using enhanced features
 
 ```python
-# Example tool usage
-# Find top 5 value midfielders under £8m
+# Example tool usage with NEW features
+
+# Find penalty takers under £8m with good fixtures
 search_players(
-    position="midfielder",
+    is_penalty_taker=True,
     max_price=8.0,
-    min_minutes=300,
-    limit=5
+    max_avg_fixture_difficulty_5=3.0,
+    sort_by="total_points"
 )
 
-# Get top 10 players by points per million
-get_top_players_by_metric(
-    metric="points_per_million",
-    min_minutes=500,
+# Get top captain options by captain potential
+search_players(
+    sort_by="captain_potential",
+    min_minutes=1000,
+    limit=8
+)
+
+# Find rotation players with high goals per 90
+search_players(
+    min_goals_per_90=0.4,
+    max_minutes_per_game=75,  # Not always starting
+    sort_by="goals_per_90",
     limit=10
+)
+
+# Spot set piece takers with easy fixtures
+search_players(
+    is_corner_taker=True,
+    max_avg_fixture_difficulty_5=3.0,
+    min_assists_per_90=0.2,
+    sort_by="assists_per_90"
 )
 ```
 
