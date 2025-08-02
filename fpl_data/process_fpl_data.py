@@ -77,9 +77,17 @@ def add_derived_features(df, fixtures_df=None, teams_data=None):
     df['expected_goals_per_million'] = np.where(df['price_millions'] > 0, df['expected_goals'] / df['price_millions'], 0)
     
     # === PERFORMANCE EFFICIENCY ===
-    df['minutes_per_game'] = np.where(df['starts'] > 0, df['minutes'] / df['starts'], 0)
+    # Estimate appearances from minutes (rough approximation: if minutes > 0, they appeared)
+    # This is not perfect but better than just using starts
+    estimated_appearances = np.where(df['minutes'] > 0, 
+                                   np.maximum(df['starts'], np.ceil(df['minutes'] / 45)), 
+                                   0)
+    df['minutes_per_appearance'] = np.where(estimated_appearances > 0, 
+                                          df['minutes'] / estimated_appearances, 0)
     df['points_per_minute'] = np.where(df['minutes'] > 0, df['total_points'] / df['minutes'], 0)
-    df['goal_involvement_rate'] = (df['goals_scored'] + df['assists']) / np.maximum(df['minutes'] / 90, 1)
+    # Goal involvement rate per 90 minutes (only for players with significant minutes)
+    df['goal_involvement_rate'] = np.where(df['minutes'] >= 90, 
+                                         (df['goals_scored'] + df['assists']) / (df['minutes'] / 90), 0)
     
     # === EXPECTED VS ACTUAL PERFORMANCE ===
     df['goals_overperformance'] = df['goals_scored'] - df['expected_goals']
@@ -87,13 +95,15 @@ def add_derived_features(df, fixtures_df=None, teams_data=None):
     df['total_overperformance'] = df['goals_overperformance'] + df['assists_overperformance']
     
     # Luck factor (ratio of actual to expected)
-    df['goals_luck_factor'] = np.where(df['expected_goals'] > 0, df['goals_scored'] / df['expected_goals'], 1)
-    df['assists_luck_factor'] = np.where(df['expected_assists'] > 0, df['assists'] / df['expected_assists'], 1)
+    # Use NaN instead of 1 for players with no expected stats
+    df['goals_luck_factor'] = np.where(df['expected_goals'] > 0, df['goals_scored'] / df['expected_goals'], np.nan)
+    df['assists_luck_factor'] = np.where(df['expected_assists'] > 0, df['assists'] / df['expected_assists'], np.nan)
     
     # === CONSISTENCY METRICS ===
     # Form consistency (based on form vs points_per_game)
+    # Clamp between 0 and 1 to prevent negative consistency scores
     df['form_consistency'] = np.where(df['points_per_game'] > 0, 
-                                    1 - abs(df['form'] - df['points_per_game']) / df['points_per_game'], 0)
+                                    np.maximum(0, 1 - abs(df['form'] - df['points_per_game']) / df['points_per_game']), 0)
     
     # === OWNERSHIP AND TRANSFER METRICS ===
     df['transfer_momentum'] = df['transfers_in'] - df['transfers_out']
@@ -107,7 +117,8 @@ def add_derived_features(df, fixtures_df=None, teams_data=None):
     
     # Goalkeeper specific
     gk_mask = df['element_type'] == 1
-    df.loc[gk_mask, 'save_percentage'] = np.where(
+    # This is saves vs total shots on target (saves + goals), not true save percentage
+    df.loc[gk_mask, 'save_rate_vs_shots'] = np.where(
         (df.loc[gk_mask, 'saves'] + df.loc[gk_mask, 'goals_conceded']) > 0,
         df.loc[gk_mask, 'saves'] / (df.loc[gk_mask, 'saves'] + df.loc[gk_mask, 'goals_conceded']),
         0
@@ -118,11 +129,11 @@ def add_derived_features(df, fixtures_df=None, teams_data=None):
         0
     )
     
-    # Defender specific
+    # Defender specific - FPL points from defensive contributions
     def_mask = df['element_type'] == 2
-    df.loc[def_mask, 'defensive_value'] = (df.loc[def_mask, 'clean_sheets'] * 4 + 
-                                         df.loc[def_mask, 'goals_scored'] * 6 + 
-                                         df.loc[def_mask, 'assists'] * 3)
+    df.loc[def_mask, 'defensive_fpl_points'] = (df.loc[def_mask, 'clean_sheets'] * 4 + 
+                                              df.loc[def_mask, 'goals_scored'] * 6 + 
+                                              df.loc[def_mask, 'assists'] * 3)
     
     # Midfielder/Forward attacking threat
     att_mask = df['element_type'].isin([3, 4])
@@ -178,53 +189,40 @@ def add_derived_features(df, fixtures_df=None, teams_data=None):
     df['goal_involvements_per_90'] = df['goals_per_90'] + df['assists_per_90']
     
     # Captain potential score (combination of ceiling and consistency)
-    # High total points (ceiling) + low form variance (consistency) + minutes reliability
+    # Use percentile-based normalization instead of max values for stability
+    total_points_95th = df['total_points'].quantile(0.95)
+    bonus_95th = df['bonus'].quantile(0.95)
+    
     df['captain_potential'] = (
-        (df['total_points'] / df['total_points'].max() * 0.4) +  # 40% ceiling
+        (np.minimum(df['total_points'] / total_points_95th, 1) * 0.4) +  # 40% ceiling
         (df['form_consistency'] * 0.3) +  # 30% consistency  
-        (np.minimum(df['minutes_per_game'] / 90, 1) * 0.2) +  # 20% reliability
-        (df['bonus'] / df['bonus'].max() * 0.1)  # 10% bonus potential
+        (np.minimum(df['minutes_per_appearance'] / 90, 1) * 0.2) +  # 20% reliability
+        (np.minimum(df['bonus'] / bonus_95th, 1) * 0.1)  # 10% bonus potential
     )
     
     # Set piece taker flags (heuristic-based on key stats)
     # Note: These are educated guesses based on player stats since FPL API doesn't provide direct flags
     
-    # Penalty takers: High penalty conversion rate indicators
-    # Players with goals but low expected goals might be penalty takers
-    df['penalty_potential'] = np.where(
-        (df['goals_scored'] > 0) & (df['expected_goals'] > 0),
-        df['goals_scored'] / df['expected_goals'],
-        0
-    )
+    # Penalty takers: Use FPL API's penalties_order field
+    # penalties_order 1-2 are typically the main penalty takers
     df['is_penalty_taker'] = (
-        (df['penalty_potential'] > 1.5) & 
-        (df['goals_scored'] >= 3) &
-        (df['minutes'] >= 500)  # Must have significant playing time
+        df['penalties_order'].notna() & 
+        (df['penalties_order'] <= 2) &
+        (df['minutes'] >= 200)  # Must have reasonable playing time
     )
     
-    # Corner takers: High assists with good creativity stats
-    df['corner_potential'] = np.where(
-        (df['creativity'] > 0) & (df['assists'] > 0),
-        (df['assists'] * df['creativity']) / 100,  # Normalize creativity
-        0
-    )
+    # Corner takers: Use FPL API's corners_and_indirect_freekicks_order field
     df['is_corner_taker'] = (
-        (df['corner_potential'] > df['corner_potential'].quantile(0.85)) &
-        (df['assists'] >= 2) &
-        (df['minutes'] >= 500)
+        df['corners_and_indirect_freekicks_order'].notna() & 
+        (df['corners_and_indirect_freekicks_order'] <= 2) &
+        (df['minutes'] >= 200)
     )
     
-    # Free kick takers: High threat + goals from outside box indicators
-    # Players with high threat but lower expected goals might take free kicks
-    df['freekick_potential'] = np.where(
-        (df['threat'] > 0) & (df['goals_scored'] > 0),
-        (df['threat'] * df['goals_scored']) / 100,  # Normalize threat
-        0
-    )
+    # Free kick takers: Use FPL API's direct_freekicks_order field
     df['is_freekick_taker'] = (
-        (df['freekick_potential'] > df['freekick_potential'].quantile(0.8)) &
-        (df['goals_scored'] >= 2) &
-        (df['minutes'] >= 500)
+        df['direct_freekicks_order'].notna() & 
+        (df['direct_freekicks_order'] <= 2) &
+        (df['minutes'] >= 200)
     )
     
     print(f"Added {len([col for col in df.columns if col not in numeric_cols + ['id', 'web_name', 'first_name', 'second_name']])} derived features")
@@ -366,6 +364,57 @@ def process_teams_data():
         print(f"Error processing teams data: {e}")
 
 
+def process_player_pics():
+    """
+    Extract player photo data from bootstrap_static.json and create player_pics.json 
+    mapping player IDs to image URLs.
+    """
+    input_file = Path("fpl_data/fpl_data/bootstrap_static.json")
+    output_file = Path("fpl_data/fpl_data/player_pics.json")
+    
+    try:
+        # Read the bootstrap_static JSON file
+        with open(input_file, 'r', encoding='utf-8') as f:
+            bootstrap_data = json.load(f)
+        
+        # Extract elements data
+        elements_data = bootstrap_data.get('elements', [])
+        
+        if elements_data:
+            # Create mapping of player ID to image URL
+            player_pics = {}
+            
+            for player in elements_data:
+                player_id = player.get('id')
+                photo = player.get('photo', '')
+                
+                if player_id and photo:
+                    # Extract the numeric part from the photo filename (e.g., "154561.jpg" -> "154561")
+                    photo_id = photo.split('.')[0] if '.' in photo else photo
+                    # Generate the FPL image URL
+                    image_url = f"https://resources.premierleague.com/premierleague/photos/players/250x250/p{photo_id}.png"
+                    player_pics[str(player_id)] = image_url
+            
+            # Save player pics mapping as JSON
+            with open(output_file, 'w', encoding='utf-8') as f:
+                json.dump(player_pics, f, indent=2, ensure_ascii=False)
+            
+            print(f"Saved player pics mapping: {len(player_pics)} players to {output_file}")
+            
+            # Show sample entries
+            sample_entries = list(player_pics.items())[:3]
+            print(f"Sample entries: {sample_entries}")
+        else:
+            print("No elements data found in bootstrap_static.json")
+        
+    except FileNotFoundError:
+        print(f"Error: {input_file} not found")
+    except json.JSONDecodeError as e:
+        print(f"Error decoding JSON: {e}")
+    except Exception as e:
+        print(f"Error processing player pics: {e}")
+
+
 def process_player_summaries():
     """
     Read player_summaries.json and split into normalized parquet files.
@@ -449,7 +498,7 @@ def process_player_summaries():
 
 def process_fpl_data():
     """
-    Process elements, fixtures, player summaries, and teams data.
+    Process elements, fixtures, player summaries, teams data, and player pics.
     """
     print("=== Processing FPL Data ===")
     
@@ -468,6 +517,10 @@ def process_fpl_data():
     # Process teams data
     print("\n4. Processing teams data...")
     process_teams_data()
+    
+    # Process player pics data
+    print("\n5. Processing player pics data...")
+    process_player_pics()
     
     print("\n=== All data processing complete! ===")
 

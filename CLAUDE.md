@@ -2,6 +2,18 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Running python files and tests
+
+To run a python file, use the following command:
+```bash
+uv run python <file_name>.py
+```
+
+To run a test, use the following command:
+```bash
+uv run pytest <test_file_name>.py
+```
+
 ## Project Overview
 
 This is a full-stack Fantasy Premier League (FPL) AI assistant application. It consists of:
