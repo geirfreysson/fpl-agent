@@ -5,6 +5,7 @@ import {
   MessagePrimitive,
   ThreadPrimitive,
   useAssistantRuntime,
+  useThread,
 } from "@assistant-ui/react";
 import type { FC } from "react";
 import { useRef, useEffect, useState } from "react";
@@ -28,66 +29,63 @@ import { EnhancedText } from "./enhanced-text";
 export const Thread: FC = () => {
   const viewportRef = useRef<HTMLDivElement>(null);
   const runtime = useAssistantRuntime();
-  const [bottomPadding, setBottomPadding] = useState(0);
+  const thread = useThread();
+  const hasMessages = thread.messages.length > 0;
 
   useEffect(() => {
-    const handleMessageSent = () => {
-      // Add bottom padding to enable scrolling
-      const viewportHeight = window.innerHeight;
-      setBottomPadding(viewportHeight);
-      
-      // Wait for React to re-render with the new padding before scrolling
-      setTimeout(() => {
-        if (viewportRef.current) {
-          // Find ALL user message bubbles (they have bg-muted class)
-          const userMessageBubbles = viewportRef.current.querySelectorAll('.bg-muted');
-          
-          if (userMessageBubbles.length > 0) {
-            // Get the LAST user message bubble
-            const lastUserBubble = userMessageBubbles[userMessageBubbles.length - 1] as HTMLElement;
-            
-            // Scroll the browser window to position user message near top
-            const rect = lastUserBubble.getBoundingClientRect();
-            const scrollTarget = window.scrollY + rect.top - 80;
-            
-            window.scrollTo({
-              top: scrollTarget,
-              behavior: 'smooth'
-            });
-          }
-        }
-      }, 300); // Wait for padding to be applied
+    const scrollToBottom = () => {
+      if (viewportRef.current) {
+        viewportRef.current.scrollTo({
+          top: viewportRef.current.scrollHeight,
+          behavior: 'smooth'
+        });
+      }
     };
 
-    // Use MutationObserver to watch for new messages being added to the DOM
+    const handleContentChange = () => {
+      // Always scroll to bottom when content changes during conversation
+      if (hasMessages) {
+        scrollToBottom();
+      }
+    };
+
+    // Use MutationObserver to watch for ANY content changes
     const observer = new MutationObserver((mutations) => {
+      let shouldScroll = false;
+      
       mutations.forEach((mutation) => {
-        if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-          // Check if any added nodes contain user message bubbles
-          mutation.addedNodes.forEach((node) => {
-            if (node.nodeType === Node.ELEMENT_NODE) {
-              const element = node as Element;
-              const hasBgMuted = element.querySelector?.('.bg-muted') || element.classList?.contains('bg-muted');
-              if (hasBgMuted) {
-                handleMessageSent();
-              }
-            }
-          });
+        // Check for any DOM changes in the viewport
+        if (mutation.type === 'childList' || mutation.type === 'characterData') {
+          shouldScroll = true;
+        }
+        // Also check for attribute changes that might affect content size
+        if (mutation.type === 'attributes' && 
+            (mutation.attributeName === 'class' || mutation.attributeName === 'style')) {
+          shouldScroll = true;
         }
       });
+      
+      if (shouldScroll) {
+        // Use requestAnimationFrame to ensure DOM has fully updated
+        requestAnimationFrame(() => {
+          handleContentChange();
+        });
+      }
     });
 
     if (viewportRef.current) {
       observer.observe(viewportRef.current, {
         childList: true,
-        subtree: true
+        subtree: true,
+        characterData: true,
+        attributes: true
       });
     }
 
     return () => {
       observer.disconnect();
     };
-  }, []);
+  }, [hasMessages]);
 
   return (
     <ThreadPrimitive.Root
@@ -98,11 +96,15 @@ export const Thread: FC = () => {
     >
       <ThreadPrimitive.Viewport 
         ref={viewportRef}
-        className="h-full overflow-y-auto scroll-smooth bg-inherit px-4 pt-8"
+        className="flex-1 overflow-y-auto scroll-smooth bg-inherit px-4 pt-8"
       >
-        <div className="flex flex-col items-center" style={{ paddingBottom: `${bottomPadding}px` }}>
-          <ThreadWelcome />
+        <div className="flex flex-col items-center" style={{ paddingBottom: hasMessages ? '120px' : '0px' }}>
+          {/* Show welcome with integrated composer when no messages */}
+          <ThreadPrimitive.Empty>
+            <ThreadWelcomeWithComposer />
+          </ThreadPrimitive.Empty>
 
+          {/* Show messages when there are conversations */}
           <ThreadPrimitive.Messages
             components={{
               UserMessage: UserMessage,
@@ -111,14 +113,20 @@ export const Thread: FC = () => {
             }}
           />
 
-          <div className="min-h-8" />
-
-          <div className="mt-3 flex w-full max-w-[var(--thread-max-width)] flex-col items-center justify-end rounded-t-lg bg-inherit pb-4">
+          {/* Minimal spacing when there are messages, more when empty */}
+          <div className={hasMessages ? "min-h-2" : "min-h-8"} />
+        </div>
+      </ThreadPrimitive.Viewport>
+      
+      {/* Fixed composer at bottom - only show when there are messages */}
+      {hasMessages && (
+        <div className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 py-20">
+          <div className="flex w-full max-w-[var(--thread-max-width)] flex-col items-center justify-end mx-auto relative">
             <ThreadScrollToBottom />
             <Composer />
           </div>
         </div>
-      </ThreadPrimitive.Viewport>
+      )}
     </ThreadPrimitive.Root>
   );
 };
@@ -129,7 +137,7 @@ const ThreadScrollToBottom: FC = () => {
       <TooltipIconButton
         tooltip="Scroll to bottom"
         variant="outline"
-        className="absolute -top-8 rounded-full disabled:invisible"
+        className="absolute -top-12 right-0 rounded-full disabled:invisible"
       >
         <ArrowDownIcon />
       </TooltipIconButton>
@@ -137,16 +145,17 @@ const ThreadScrollToBottom: FC = () => {
   );
 };
 
-const ThreadWelcome: FC = () => {
+const ThreadWelcomeWithComposer: FC = () => {
   return (
-    <ThreadPrimitive.Empty>
-      <div className="flex w-full max-w-[var(--thread-max-width)] flex-grow flex-col">
-        <div className="flex w-full flex-col items-center justify-end min-h-[50vh]">
-          <p className="mt-4 font-medium">How can I help you today?</p>
-        </div>
-        <ThreadWelcomeSuggestions />
+    <div className="flex w-full max-w-[var(--thread-max-width)] flex-grow flex-col h-full">
+      <div className="flex w-full flex-col items-center justify-end min-h-[40vh] flex-grow">
+        <p className="mt-4 font-medium">How can I help you today?</p>
       </div>
-    </ThreadPrimitive.Empty>
+      <ThreadWelcomeSuggestions />
+      <div className="mt-6 flex w-full flex-col items-center">
+        <Composer />
+      </div>
+    </div>
   );
 };
 

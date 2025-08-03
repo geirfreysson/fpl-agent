@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign Out - FPL Agent</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+        }
+        .logo {
+            margin-bottom: 2rem;
+        }
+        .logo h1 {
+            color: #1e3a8a;
+            font-size: 2rem;
+            margin: 0;
+        }
+        .logo p {
+            color: #6b7280;
+            margin: 0.5rem 0 0 0;
+        }
+        .message {
+            color: #6b7280;
+            margin: 1rem 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <h1>🤖 FPL Agent</h1>
+            <p>Your Fantasy Premier League AI Assistant</p>
+        </div>
+        <div class="message">
+            Signing you out...
+        </div>
+    </div>
+
+    <script>
+        function initClerkLogout() {
+            try {
+                if (typeof window.Clerk === 'undefined') {
+                    throw new Error('Clerk SDK failed to load')
+                }
+
+                window.Clerk.load({
+                    allowedRedirectOrigins: ['http://localhost:8000', 'http://0.0.0.0:8000']
+                }).then(() => {
+                    if (window.Clerk.user) {
+                        return window.Clerk.signOut()  // Sign out current user
+                    }
+                }).then(() => {
+                    window.location.href = "/sign-in";
+                }).catch(error => {
+                    console.error('Clerk signout error:', error)
+                    window.location.href = "/sign-in";
+                })
+            } catch (error) {
+                console.error('Clerk signout error:', error)
+                window.location.href = "/sign-in";
+            }
+        }
+
+        // Wait for DOM to be ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() {
+                setTimeout(() => {
+                    if (typeof window.Clerk !== 'undefined') {
+                        initClerkLogout()
+                    }
+                }, 500)
+            })
+        }
+    </script>
+
+    <!-- Load Clerk SDK -->
+    <script
+        crossorigin="anonymous"
+        data-clerk-publishable-key="{{clerk_publishable_key}}"
+        src="https://unpkg.com/@clerk/clerk-js@latest/dist/clerk.browser.js"
+        type="text/javascript"
+        onload="initClerkLogout()">
+    </script>
+</body>
+</html>

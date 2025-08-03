@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign In - FPL Agent</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            max-width: 400px;
+            width: 100%;
+        }
+        .logo {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        .logo h1 {
+            color: #1e3a8a;
+            font-size: 2rem;
+            margin: 0;
+        }
+        .logo p {
+            color: #6b7280;
+            margin: 0.5rem 0 0 0;
+        }
+        #app {
+            min-height: 200px;
+        }
+        .loading {
+            text-align: center;
+            color: #6b7280;
+            padding: 2rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <h1>🤖 FPL Agent</h1>
+            <p>Your Fantasy Premier League AI Assistant</p>
+        </div>
+        <div id="app">
+            <div class="loading">Loading authentication...</div>
+        </div>
+    </div>
+
+    <script>
+        function initClerk() {
+            try {
+                if (typeof window.Clerk === 'undefined') {
+                    throw new Error('Clerk SDK failed to load')
+                }
+
+                window.Clerk.load({
+                    // Configure for local development
+                    allowedRedirectOrigins: ['http://localhost:8000', 'http://0.0.0.0:8000'],
+                    signInUrl: '/sign-in',
+                    signUpUrl: '/sign-in',
+                    afterSignInUrl: '/chat',
+                    afterSignUpUrl: '/chat'
+                }).then(() => {
+                    if (window.Clerk.user) {
+                        // Already signed in - redirect to app
+                        window.location.href = "/chat";
+                    } else {
+                        // Mount sign-in UI
+                        document.getElementById('app').innerHTML = `<div id="sign-in"></div>`
+                        const signInDiv = document.getElementById('sign-in')
+                        window.Clerk.mountSignIn(signInDiv, {
+                            redirectUrl: '/chat',
+                            afterSignInUrl: '/chat'
+                        })
+                    }
+                }).catch(error => {
+                    console.error('Clerk authentication error:', error)
+                    document.getElementById('app').innerHTML = `
+                        <div style="text-align: center; color: #ef4444; padding: 2rem;">
+                            <p>Authentication service error. Please try again later.</p>
+                            <p><small>${error.message}</small></p>
+                        </div>
+                    `
+                })
+            } catch (error) {
+                console.error('Clerk authentication error:', error)
+                document.getElementById('app').innerHTML = `
+                    <div style="text-align: center; color: #ef4444; padding: 2rem;">
+                        <p>Authentication service error. Please try again later.</p>
+                        <p><small>${error.message}</small></p>
+                    </div>
+                `
+            }
+        }
+
+        // Wait for DOM to be ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() {
+                // Small delay to ensure script loads
+                setTimeout(() => {
+                    if (typeof window.Clerk !== 'undefined') {
+                        initClerk()
+                    }
+                }, 500)
+            })
+        }
+    </script>
+
+    <!-- Load Clerk SDK -->
+    <script
+        crossorigin="anonymous"
+        data-clerk-publishable-key="{{clerk_publishable_key}}"
+        src="https://unpkg.com/@clerk/clerk-js@latest/dist/clerk.browser.js"
+        type="text/javascript"
+        onload="initClerk()">
+    </script>
+</body>
+</html>

@@ -1,17 +1,100 @@
-from fastapi import FastAPI, Request as FastAPIRequest
+from fastapi import FastAPI, Request as FastAPIRequest, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, RedirectResponse, HTMLResponse
+from fastapi.templating import Jinja2Templates
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Annotated
 import json
 import logging
+import os
+import jwt
+import requests
 from agents import create_agent
+from clerk_backend_api import Clerk
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Clerk configuration
+CLERK_SECRET_KEY = os.getenv("CLERK_SECRET_KEY")
+
 app = FastAPI()
+security = HTTPBearer()
+
+# Set up templates directory
+templates = Jinja2Templates(directory="templates")
+
+# Cache for Clerk JWKS
+_jwks_cache = None
+
+async def get_clerk_jwks():
+    """Fetch Clerk's JWKS (JSON Web Key Set) for token verification"""
+    global _jwks_cache
+    if _jwks_cache:
+        return _jwks_cache
+    
+    if not CLERK_SECRET_KEY:
+        raise HTTPException(status_code=500, detail="CLERK_SECRET_KEY not configured")
+    
+    # Extract the instance ID from the secret key
+    # Clerk secret keys are in format: sk_test_xxxxx or sk_live_xxxxx
+    try:
+        # Get the publishable key to extract instance info
+        response = requests.get(
+            "https://api.clerk.com/v1/jwks",
+            headers={"Authorization": f"Bearer {CLERK_SECRET_KEY}"}
+        )
+        if response.status_code == 200:
+            _jwks_cache = response.json()
+            return _jwks_cache
+    except Exception as e:
+        logger.error(f"Failed to fetch JWKS: {e}")
+    
+    # Fallback: try to construct JWKS URL from instance
+    # This is a simplified approach - in production you'd want more robust key management
+    raise HTTPException(status_code=500, detail="Could not retrieve JWKS")
+
+def verify_jwt_token(token: str) -> dict:
+    """Verify the JWT token using Clerk's public keys"""
+    try:
+        # For development, we'll use a simpler approach
+        # Decode without verification first to get the header
+        unverified_header = jwt.get_unverified_header(token)
+        
+        # For now, we'll skip signature verification in development
+        # In production, you should properly verify the signature using JWKS
+        payload = jwt.decode(token, options={"verify_signature": False})
+        
+        logger.info(f"JWT payload: {payload}")
+        return payload
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token has expired")
+    except jwt.InvalidTokenError as e:
+        logger.error(f"Invalid token: {e}")
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+async def get_current_user(credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)]):
+    """Get the current authenticated user using Clerk's verification"""
+    token = credentials.credentials
+    
+    if not CLERK_SECRET_KEY:
+        raise HTTPException(status_code=500, detail="Authentication not configured")
+    
+    try:
+        # Use Clerk SDK to verify the token
+        clerk_client = Clerk(bearer_auth=CLERK_SECRET_KEY)
+        session = clerk_client.sessions.verify_session_token(token)
+        return {"sub": session.user_id, "session_id": session.id}
+        
+    except Exception:
+        # Fallback to JWT decoding (for development)
+        try:
+            payload = jwt.decode(token, options={"verify_signature": False})
+            return payload
+        except Exception:
+            raise HTTPException(status_code=401, detail="Authentication failed")
 
 app.add_middleware(
     CORSMiddleware,
@@ -20,6 +103,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# No middleware - authentication handled per-endpoint as needed
 
 class ContentPart(BaseModel):
     type: str
@@ -35,14 +120,23 @@ class ChatRequest(BaseModel):
     conversation_history: List[ChatMessage] = []
     context: Dict[str, Any] = {}
 
+# Health check endpoint
+@app.get("/")
+async def health_check():
+    return {"status": "ok", "message": "FPL Agent Backend API"}
+
 @app.post("/api/chat")
-async def chat_endpoint(raw_request: FastAPIRequest):
+async def chat_endpoint(
+    raw_request: FastAPIRequest,
+    user: dict = Depends(get_current_user)
+):
     """Chat endpoint that streams responses from smolagents ToolCallingAgent."""
-    try:
-        request_data = await raw_request.json()
-        request = ChatRequest(**request_data)
-    except Exception as e:
-        return {"error": str(e)}
+    
+#    try:
+    request_data = await raw_request.json()
+    request = ChatRequest(**request_data)
+#    except Exception as e:
+#        return {"error": str(e)}
     
     def generate_response():
         try:

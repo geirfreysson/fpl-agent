@@ -44,13 +44,18 @@ pytest tests/        # Run backend tests
 ### Environment Setup
 Create `frontend/.env.local` with:
 ```
-OPENAI_API_KEY=sk-your-key-here
+# Clerk Authentication
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
+CLERK_SECRET_KEY=sk_test_...
+
+# Backend URL
 BACKEND_URL=http://localhost:8000  # Optional, defaults to localhost:8000
 ```
 
-For the backend, set the environment variable:
+For the backend, set the environment variables:
 ```bash
 export OPENAI_API_KEY=sk-your-key-here
+export CLERK_SECRET_KEY=sk_test_...       # Backend key for API verification
 ```
 
 ## Architecture

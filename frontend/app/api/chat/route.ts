@@ -1,11 +1,30 @@
 
-export const runtime = "edge";
+
 export const maxDuration = 30;
 
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
 
 export async function POST(req: Request) {
   try {
+    // Get the token from the Authorization header (sent by client)
+    const authHeader = req.headers.get('Authorization');
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Authorization header required' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    
+    const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+    
+    if (!token) {
+      return new Response(JSON.stringify({ error: 'JWT token required' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    
     const { messages } = await req.json();
     
     // Get the latest message from the user and extract text properly
@@ -28,11 +47,13 @@ export async function POST(req: Request) {
       content: msg.content
     }));
 
-    // Call our Python backend
+    // Call our Python backend with auth token
+    console.log('Calling backend with token:', `Bearer ${token.substring(0, 20)}...`);
     const response = await fetch(`${BACKEND_URL}/api/chat`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`,
       },
       body: JSON.stringify({
         message: [{ type: "text", text: userMessageText }],
