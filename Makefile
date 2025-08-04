@@ -1,4 +1,4 @@
-.PHONY: dev frontend backend help
+.PHONY: dev frontend backend build prod help
 
 # Default ports
 FRONTEND_PORT ?= 3000
@@ -19,12 +19,29 @@ backend:
 	@echo "Starting backend server on port $(BACKEND_PORT)..."
 	@cd backend && DEBUG=true PORT=$(BACKEND_PORT) uv run python main.py
 
+# Build frontend for production
+build:
+	@echo "Building frontend for production..."
+	@cd frontend && npm run build
+
+# Run production servers
+prod:
+	@echo "Starting production servers..."
+	@make -j2 prod-frontend backend
+
+# Run frontend production server
+prod-frontend:
+	@echo "Starting frontend production server on port $(FRONTEND_PORT)..."
+	@cd frontend && BACKEND_URL=http://localhost:$(BACKEND_PORT) npm run start -- --port $(FRONTEND_PORT)
+
 # Show help
 help:
 	@echo "Available targets:"
 	@echo "  dev      - Start both frontend and backend servers (default)"
 	@echo "  frontend - Start only the frontend server"
 	@echo "  backend  - Start only the backend server"
+	@echo "  build    - Build frontend for production"
+	@echo "  prod     - Start production servers"
 	@echo "  help     - Show this help message"
 	@echo ""
 	@echo "Port configuration:"
