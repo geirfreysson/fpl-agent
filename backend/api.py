@@ -120,8 +120,12 @@ class ChatRequest(BaseModel):
     conversation_history: List[ChatMessage] = []
     context: Dict[str, Any] = {}
 
-# Health check endpoint
+# Health check endpoints
 @app.get("/")
+async def root():
+    return {"status": "ok", "message": "FPL Agent Backend API"}
+
+@app.get("/health")
 async def health_check():
     return {"status": "ok", "message": "FPL Agent Backend API"}
 
