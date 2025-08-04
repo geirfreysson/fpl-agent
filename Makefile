@@ -22,12 +22,18 @@ backend:
 # Build frontend for production
 build:
 	@echo "Building frontend for production..."
-	@cd frontend && npm run build
+	@cd frontend && npm ci && npm run build
 
 # Run production servers
 prod:
 	@echo "Starting production servers..."
 	@make -j2 prod-frontend backend
+
+# Deploy command for Render (backend on 8000, frontend on $PORT)
+deploy:
+	@echo "Starting deployment servers..."
+	@cd backend && PORT=8000 uv run python main.py &
+	@cd frontend && BACKEND_URL=http://localhost:8000 npm run start -- --port $(PORT)
 
 # Run frontend production server
 prod-frontend:
