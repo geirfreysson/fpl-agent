@@ -22,7 +22,7 @@ backend:
 # Build frontend for production
 build:
 	@echo "Building frontend for production..."
-	@cd frontend && npm ci && npm run build
+	@cd frontend && npm install && npm run build
 
 # Run production servers
 prod:
