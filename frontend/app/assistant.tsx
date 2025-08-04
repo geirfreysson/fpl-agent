@@ -4,6 +4,7 @@ import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import { useChatRuntime } from "@assistant-ui/react-ai-sdk";
 import { Thread } from "@/components/assistant-ui/thread";
 import { UserButton, useAuth } from "@clerk/nextjs";
+import Image from "next/image";
 // Commented out for simple layout - uncomment to restore sidebar functionality
 // import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 // import { AppSidebar } from "@/components/app-sidebar";
@@ -38,9 +39,13 @@ export const Assistant = () => {
         <header className="flex items-center justify-between p-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-blue-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">FPL</span>
-              </div>
+              <Image 
+                src="/assets/logo.svg" 
+                alt="FPL Agent Logo" 
+                width={32} 
+                height={32}
+                className="w-8 h-8"
+              />
               <h1 className="text-xl font-semibold text-foreground">FPL Agent</h1>
             </div>
             <div className="text-sm text-muted-foreground hidden sm:block">
