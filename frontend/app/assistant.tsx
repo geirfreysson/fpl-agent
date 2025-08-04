@@ -15,7 +15,7 @@ export const Assistant = () => {
   
   const runtime = useChatRuntime({
     api: "/api/chat",
-    headers: async () => {
+    headers: async (): Promise<Record<string, string>> => {
       if (!isSignedIn) {
         return {};
       }
