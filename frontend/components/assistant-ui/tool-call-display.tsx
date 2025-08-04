@@ -2,9 +2,9 @@ import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react";
 import { useState } from "react";
 import { Button } from "../ui/button";
 import { getToolDisplayName } from "../../lib/tool-display-names";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import { cn } from "@/lib/utils";
+// import ReactMarkdown from "react-markdown";
+// import remarkGfm from "remark-gfm";
+// import { cn } from "@/lib/utils";
 
 interface ToolCallDisplayProps {
   toolName: string;

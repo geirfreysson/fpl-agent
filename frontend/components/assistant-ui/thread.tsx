@@ -4,11 +4,10 @@ import {
   ComposerPrimitive,
   MessagePrimitive,
   ThreadPrimitive,
-  useAssistantRuntime,
   useThread,
 } from "@assistant-ui/react";
 import type { FC } from "react";
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect } from "react";
 import {
   ArrowDownIcon,
   CheckIcon,
@@ -28,7 +27,7 @@ import { EnhancedText } from "./enhanced-text";
 
 export const Thread: FC = () => {
   const viewportRef = useRef<HTMLDivElement>(null);
-  const runtime = useAssistantRuntime();
+  // const runtime = useAssistantRuntime();
   const thread = useThread();
   const hasMessages = thread.messages.length > 0;
 

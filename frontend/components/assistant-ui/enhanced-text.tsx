@@ -7,7 +7,7 @@ import remarkGfm from "remark-gfm";
 import { cn } from "@/lib/utils";
 
 export const EnhancedText: TextContentPartComponent = (props) => {
-  let text = props.text;
+  const text = props.text;
   
   // If text contains tool calls, we need to show both tool calls AND any final answer text
   if (typeof text === 'string' && text.includes('__TOOL_CALL__:')) {
