@@ -34,40 +34,51 @@ export const Thread: FC = () => {
   useEffect(() => {
     const scrollToBottom = () => {
       if (viewportRef.current) {
-        viewportRef.current.scrollTo({
-          top: viewportRef.current.scrollHeight,
-          behavior: 'smooth'
-        });
+        const { scrollTop, scrollHeight, clientHeight } = viewportRef.current;
+        const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+        
+        // Only auto-scroll if user is already near the bottom
+        if (isNearBottom) {
+          viewportRef.current.scrollTo({
+            top: scrollHeight,
+            behavior: 'smooth'
+          });
+        }
       }
     };
 
-    const handleContentChange = () => {
-      // Always scroll to bottom when content changes during conversation
-      if (hasMessages) {
-        scrollToBottom();
-      }
-    };
-
-    // Use MutationObserver to watch for ANY content changes
+    // Use MutationObserver to watch for content changes, but be more selective
     const observer = new MutationObserver((mutations) => {
       let shouldScroll = false;
       
       mutations.forEach((mutation) => {
-        // Check for any DOM changes in the viewport
-        if (mutation.type === 'childList' || mutation.type === 'characterData') {
-          shouldScroll = true;
+        // Only scroll for new content being added (not UI state changes)
+        if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+          // Check if added nodes contain actual content (not just UI elements)
+          for (const node of mutation.addedNodes) {
+            if (node.nodeType === Node.ELEMENT_NODE) {
+              const element = node as Element;
+              // Look for message content or streaming text updates
+              if (element.matches('[data-message-id], [data-testid*="message"], .message, [class*="message"]') ||
+                  element.textContent?.trim()) {
+                shouldScroll = true;
+                break;
+              }
+            } else if (node.nodeType === Node.TEXT_NODE && node.textContent?.trim()) {
+              shouldScroll = true;
+              break;
+            }
+          }
         }
-        // Also check for attribute changes that might affect content size
-        if (mutation.type === 'attributes' && 
-            (mutation.attributeName === 'class' || mutation.attributeName === 'style')) {
+        // Also handle text content changes for streaming
+        else if (mutation.type === 'characterData' && mutation.target.textContent?.trim()) {
           shouldScroll = true;
         }
       });
       
       if (shouldScroll) {
-        // Use requestAnimationFrame to ensure DOM has fully updated
         requestAnimationFrame(() => {
-          handleContentChange();
+          scrollToBottom();
         });
       }
     });
@@ -76,8 +87,7 @@ export const Thread: FC = () => {
       observer.observe(viewportRef.current, {
         childList: true,
         subtree: true,
-        characterData: true,
-        attributes: true
+        characterData: true
       });
     }
 
