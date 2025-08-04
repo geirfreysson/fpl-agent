@@ -105,9 +105,9 @@ export const Thread: FC = () => {
     >
       <ThreadPrimitive.Viewport 
         ref={viewportRef}
-        className="flex-1 overflow-y-auto scroll-smooth bg-inherit px-4 pt-8"
+        className={`flex-1 overflow-y-auto scroll-smooth bg-inherit px-4 pt-8 ${hasMessages ? 'pb-20' : ''}`}
       >
-        <div className="flex flex-col items-center" style={{ paddingBottom: hasMessages ? '120px' : '0px' }}>
+        <div className="flex flex-col items-center">
           {/* Show welcome with integrated composer when no messages */}
           <ThreadPrimitive.Empty>
             <ThreadWelcomeWithComposer />
@@ -129,7 +129,7 @@ export const Thread: FC = () => {
       
       {/* Fixed composer at bottom - only show when there are messages */}
       {hasMessages && (
-        <div className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 py-20">
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-background border-t px-4 py-4">
           <div className="flex w-full max-w-[var(--thread-max-width)] flex-col items-center justify-end mx-auto relative">
             <ThreadScrollToBottom />
             <Composer />

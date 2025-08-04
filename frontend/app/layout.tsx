@@ -16,6 +16,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "FPL Agent - AI Assistant",
   description: "Your Fantasy Premier League AI Assistant",
+  viewport: {
+    width: 'device-width',
+    initialScale: 1,
+  },
   icons: {
     icon: [
       { url: '/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
