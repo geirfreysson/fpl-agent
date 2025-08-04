@@ -73,4 +73,8 @@ ai-docs/
 package-lock.json
 
 # FPL data
+fpl_data/*.json
 fpl_data/fpl_data/*.json
+!fpl_data/fpl_data/player_pics.json
+!fpl_data/fpl_data/teams.json
+
