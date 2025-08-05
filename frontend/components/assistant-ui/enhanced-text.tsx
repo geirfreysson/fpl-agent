@@ -14,8 +14,9 @@ export const EnhancedText: TextContentPartComponent = (props) => {
     const renderedParts: ReactNode[] = [];
     let currentIndex = 0;
     let lastToolCallEnd = 0;
+    const toolCalls: Array<{name: string, arguments: Record<string, unknown>, result: string}> = [];
     
-    // Process all tool calls first
+    // First, extract all tool calls
     while (currentIndex < text.length) {
       const toolCallStart = text.indexOf('__TOOL_CALL__:', currentIndex);
       
@@ -66,14 +67,11 @@ export const EnhancedText: TextContentPartComponent = (props) => {
         const jsonStr = text.slice(jsonStart, jsonEnd);
         const toolCallData = JSON.parse(jsonStr);
         
-        renderedParts.push(
-          <ToolCallDisplay 
-            key={`tool-${renderedParts.length}`}
-            toolName={toolCallData.name}
-            arguments={toolCallData.arguments}
-            result={toolCallData.result}
-          />
-        );
+        toolCalls.push({
+          name: toolCallData.name,
+          arguments: toolCallData.arguments,
+          result: toolCallData.result
+        });
         
         lastToolCallEnd = jsonEnd;
         currentIndex = jsonEnd;
@@ -83,6 +81,50 @@ export const EnhancedText: TextContentPartComponent = (props) => {
         currentIndex = toolCallStart + '__TOOL_CALL__:'.length;
       }
     }
+    
+    // Now consolidate consecutive tool calls of the same type
+    const consolidatedCalls: Array<{
+      name: string;
+      calls: Array<{arguments: Record<string, unknown>, result: string}>;
+    }> = [];
+    
+    for (const toolCall of toolCalls) {
+      const lastConsolidated = consolidatedCalls[consolidatedCalls.length - 1];
+      
+      if (lastConsolidated && lastConsolidated.name === toolCall.name) {
+        // Same tool as previous, add to existing group
+        lastConsolidated.calls.push({
+          arguments: toolCall.arguments,
+          result: toolCall.result
+        });
+      } else {
+        // Different tool or first tool, create new group
+        consolidatedCalls.push({
+          name: toolCall.name,
+          calls: [{
+            arguments: toolCall.arguments,
+            result: toolCall.result
+          }]
+        });
+      }
+    }
+    
+    // Render consolidated tool calls
+    consolidatedCalls.forEach((consolidated, index) => {
+      const isMultiple = consolidated.calls.length > 1;
+      const firstCall = consolidated.calls[0];
+      
+      renderedParts.push(
+        <ToolCallDisplay 
+          key={`tool-${index}`}
+          toolName={consolidated.name}
+          arguments={firstCall.arguments}
+          result={firstCall.result}
+          count={consolidated.calls.length}
+          allCalls={isMultiple ? consolidated.calls : undefined}
+        />
+      );
+    });
     
     // After processing tool calls, check if there's additional text (final answer)
     const finalAnswerText = text.slice(lastToolCallEnd).trim();

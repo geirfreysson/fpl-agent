@@ -279,16 +279,30 @@ def _get_required_columns(filters: dict, sort_by: list) -> list:
     """Dynamically determine which columns to load based on filters and sorting"""
     required = {'id', 'web_name', 'team', 'element_type', 'now_cost', 'total_points', 'first_name', 'second_name'}
     
+    # Column mapping for common aliases
+    column_mapping = {
+        'price': 'now_cost',
+        'cost': 'now_cost', 
+        'ownership': 'selected_by_percent',
+        'name': 'web_name'
+    }
+    
     # Add columns from filters
     for key in filters.keys():
         if key.startswith(('min_', 'max_')):
             column = key[4:]  # Remove prefix
-            required.add(column)
+            # Map column name if it's an alias
+            mapped_column = column_mapping.get(column, column)
+            required.add(mapped_column)
         else:
-            required.add(key)
+            # Map column name if it's an alias
+            mapped_column = column_mapping.get(key, key)
+            required.add(mapped_column)
     
-    # Add sort columns
-    required.update(sort_by)
+    # Add sort columns with mapping
+    for col in sort_by:
+        mapped_column = column_mapping.get(col, col)
+        required.add(mapped_column)
     
     return list(required)
 
@@ -541,8 +555,26 @@ def search_players(
         return "\n".join(result_lines)
         
     except Exception as e:
-        logging.error(f"Error in search_players: {str(e)}")
-        return f"Error searching players: {str(e)}"
+        error_msg = str(e)
+        logging.error(f"Error in search_players: {error_msg}")
+        
+        # Provide more helpful error messages
+        if "No match for FieldRef.Name" in error_msg:
+            # Extract the column name from the error
+            import re
+            match = re.search(r"No match for FieldRef\.Name\((\w+)\)", error_msg)
+            if match:
+                invalid_column = match.group(1)
+                suggestion_map = {
+                    'price': 'Try using "now_cost" or just omit sort_by to use default sorting',
+                    'cost': 'Try using "now_cost" or just omit sort_by to use default sorting',
+                    'ownership': 'Try using "selected_by_percent"',
+                    'name': 'Try using "web_name"'
+                }
+                suggestion = suggestion_map.get(invalid_column, f'Column "{invalid_column}" not found in data')
+                return f"Error: Invalid column '{invalid_column}' for sorting. {suggestion}"
+        
+        return f"Error searching players: {error_msg}"
 
 
 @tool

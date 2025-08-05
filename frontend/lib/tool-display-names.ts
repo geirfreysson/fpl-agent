@@ -2,9 +2,22 @@
  * Maps tool names to user-friendly display names
  */
 const TOOL_DISPLAY_NAMES: Record<string, string> = {
+  // General tools
+  help: "Looked at the FPL help guide",
   get_weather: "Checked weather",
-  // Add more tool mappings here as needed
-  // example_tool: "Performed example action",
+  
+  // Player search and analysis
+  search_players: "Searched players",
+  get_player_details: "Analyzed player details",
+  get_player_form: "Analyzed player form",
+  find_player_replacements: "Found player replacements",
+  
+  // Fixture analysis
+  get_easiest_fixtures: "Analyzed fixture difficulty",
+  get_player_fixtures: "Checked player fixtures",
+  
+  // Price and budget analysis
+  get_players_by_price_range: "Found players by price range",
 };
 
 /**
