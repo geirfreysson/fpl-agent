@@ -413,42 +413,62 @@ def search_players(
     filters: dict = None
 ) -> str:
     """
-    Streamlined player search with comprehensive filtering and flexible sorting.
+    Comprehensive player search with extensive filtering and multi-column sorting capabilities.
     
-    Available position options are: GK, DEF, MID, FWD
+    POSITION OPTIONS: GK, DEF, MID, FWD
+    
+    FILTERING: Use filters dict with min_/max_ prefixes for ranges:
+    - BASIC: position, team, player_id, status
+    - COST: min_price, max_price, budget_enabler_price (exact price)
+    - PERFORMANCE: min_total_points, max_total_points, min_form, max_form, min_points_per_game, max_points_per_game
+    - OWNERSHIP: min_ownership, max_ownership (selected_by_percent)
+    - PLAYING TIME: min_minutes, max_minutes, min_minutes_per_game, max_minutes_per_game
+    - GOALS/ASSISTS: min_goals_scored, max_goals_scored, min_assists, max_assists
+    - VALUE METRICS: min_points_per_million, max_points_per_million, min_form_per_million, max_form_per_million
+    - ADVANCED: min_expected_goals, max_expected_goals, min_expected_assists, max_expected_assists
+    - EFFICIENCY: min_points_per_minute, max_points_per_minute, min_goal_involvement_rate, max_goal_involvement_rate
+    - OVERPERFORMANCE: min_goals_overperformance, max_goals_overperformance, min_assists_overperformance, max_assists_overperformance
+    - LUCK FACTORS: min_goals_luck_factor, max_goals_luck_factor, min_assists_luck_factor, max_assists_luck_factor
+    - FIXTURES: min_avg_fixture_difficulty_3, max_avg_fixture_difficulty_5, min_avg_fixture_difficulty_10, max_avg_fixture_difficulty_10
+    - POSITION SPECIFIC: min_save_percentage, max_save_percentage, min_clean_sheet_rate, max_clean_sheet_rate, min_attacking_threat, max_attacking_threat, min_defensive_value, max_defensive_value
+    - PER 90 STATS: min_goals_per_90, max_goals_per_90, min_assists_per_90, max_assists_per_90, min_goal_involvements_per_90, max_goal_involvements_per_90
+    - RANKINGS: min_points_rank_in_position, max_points_rank_in_position, min_value_rank_in_position, max_value_rank_in_position
+    - BOOLEAN FLAGS: is_penalty_taker, is_corner_taker, is_freekick_taker
+    - CATEGORIES: ownership_category (Low/Medium/High/Template)
+    - ICT INDEX: min_influence, max_influence, min_creativity, max_creativity, min_threat, max_threat, min_ict_index, max_ict_index
+    - CARDS: min_yellow_cards, max_yellow_cards, min_red_cards, max_red_cards
+    - GOALKEEPER: min_saves, max_saves, min_goals_conceded, max_goals_conceded
+    - AVAILABILITY: min_chance_of_playing, max_chance_of_playing
+    
+    SORTING: 
+    - SINGLE COLUMN: sort_by="total_points" (default), "form", "points_per_million", "ownership", etc.
+    - MULTI-COLUMN: sort_by="selected_by_percent,total_points" (comma-separated, first=primary sort)
+    - For requests like "low ownership but high points", use: sort_by="selected_by_percent,total_points" with ascending=True for ownership, False for points
+    - All column names from elements.parquet are valid sort options including enhanced features
 
     Args:
         limit: Number of players to return (default: 10)
-        sort_by: Column to sort by (e.g. "total_points", "points_per_million", "form")
-        ascending: Sort direction - False for highest first, True for lowest first
-        filters: Dictionary of filters to apply. Supports:
-            - Range filters: "min_price", "max_price", "min_total_points", etc.
-            - Exact matches: "position", "team", "player_id"
-            - Boolean flags: "is_penalty_taker", "is_corner_taker"
-            - Special values: "budget_enabler_price" for exact price match
+        sort_by: Single column or comma-separated columns for multi-level sorting
+        ascending: Sort direction - False for highest first, True for lowest first (applies to all columns)
+        filters: Dictionary of filters using column names with min_/max_ prefixes or exact matches
     
     Returns:
         String with formatted player results including applied filters summary
         
     Examples:
-        # Simple usage
+        # Simple searches
         search_players()  # Top 10 by total points
         search_players(sort_by="points_per_million", limit=5)
-        
-        # With filters
         search_players(filters={"position": "MID", "max_price": 8.0, "min_form": 5.0})
         
-        # Complex example
-        search_players(
-            limit=5,
-            sort_by="attacking_threat",
-            filters={
-                "position": "FWD",
-                "max_price": 10.0,
-                "min_goals_scored": 5,
-                "is_penalty_taker": True
-            }
-        )
+        # Multi-column sorting for complex requests
+        search_players(sort_by="selected_by_percent,total_points", ascending=True, limit=5)  # Low ownership, high points
+        search_players(sort_by="form,points_per_million", filters={"position": "FWD"})  # Best form forwards, then by value
+        
+        # Advanced filtering with enhanced features
+        search_players(filters={"position": "DEF", "is_penalty_taker": True, "max_avg_fixture_difficulty_5": 3.0})
+        search_players(filters={"min_goals_per_90": 0.4, "max_minutes_per_game": 75, "position": "FWD"})  # Rotation forwards
+        search_players(filters={"ownership_category": "Low", "min_expected_goals_per_million": 0.5, "max_price": 7.0})
     """
     try:
         # Get data paths
@@ -481,7 +501,8 @@ def search_players(
             sort_by_list = [col.strip() for col in sort_by.split(',')]
         else:
             sort_by_list = [sort_by]
-        ascending_list = [ascending]
+        # Create ascending list with same length as sort_by_list
+        ascending_list = [ascending] * len(sort_by_list)
         
         # Load only required columns
         required_columns = _get_required_columns(price_filters, sort_by_list)
@@ -1205,6 +1226,11 @@ def extract_player_sections(player: dict, team_name: str, position: str, tier: s
             row("Goals Conceded", player["goals_conceded"], position_rankings.get("Goals Conceded")),
             row("Goal Involvement", player["goals_scored"] + player["assists"])
         ]
+        # Add Expected Goals and Expected Assists for defenders
+        if "expected_goals" in player and pd.notna(player["expected_goals"]):
+            metrics.append(row("Expected Goals (xG)", f"{player['expected_goals']:.2f}"))
+        if "expected_assists" in player and pd.notna(player["expected_assists"]):
+            metrics.append(row("Expected Assists (xA)", f"{player['expected_assists']:.2f}"))
     else:
         metrics = [
             row("Goals", player["goals_scored"], position_rankings.get("Goals")),
@@ -1212,6 +1238,11 @@ def extract_player_sections(player: dict, team_name: str, position: str, tier: s
             row("Goal Involvement", player["goals_scored"] + player["assists"]),
             row("Goals per 90", f"{(player['goals_scored'] / max(1, player['minutes']) * 90):.2f}")
         ]
+        # Add Expected Goals and Expected Assists for midfielders and forwards
+        if "expected_goals" in player and pd.notna(player["expected_goals"]):
+            metrics.append(row("Expected Goals (xG)", f"{player['expected_goals']:.2f}"))
+        if "expected_assists" in player and pd.notna(player["expected_assists"]):
+            metrics.append(row("Expected Assists (xA)", f"{player['expected_assists']:.2f}"))
     sections["Performance Metrics"] = pd.DataFrame(metrics)
 
     # Advanced Metrics

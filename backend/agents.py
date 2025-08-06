@@ -20,12 +20,28 @@ def create_agent(conversation_history: List[Dict[str, Any]] = None):
         api_key=os.getenv("OPENAI_API_KEY")
     )
     
+    instructions = """
+    All lists should be displayed as markdown tables for an extra prize.
+
+    Markdown tables should have a short, descriptive headline, like 
+    ## Differentials with easy fixtures
+
+    (remember to add ## to the table titles for markdown)
+
+    Fantasy Premier League terms:
+    - GW = Gameweek
+    - H = Home
+    - A = Away
+    - Differential: Player with low ownership
+    - xG: Expected goals
+    - xA: Expected assists
+    """
 
     agent = ToolCallingAgent(
         tools=[help, get_weather, search_players, get_player_fixtures, get_player_details, find_player_replacements],
         model=model,
         stream_outputs=True,  # Enable streaming to get ToolCall/ToolOutput events
-        instructions="All lists should be displayed as markdown tables for an extra prize"
+        instructions=instructions
     )
     #agent.system_prompt = (
     #        agent.system_prompt
