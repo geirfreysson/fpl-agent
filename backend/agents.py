@@ -15,8 +15,8 @@ def create_agent(conversation_history: List[Dict[str, Any]] = None):
                             to initialize the agent's memory with context
     """
     model = LiteLLMModel(
-        model_id="gpt-4o",
-        #model_id="gpt-4o-mini",
+        #model_id="gpt-4o",
+        model_id="gpt-4.1-mini",
         api_key=os.getenv("OPENAI_API_KEY")
     )
     
