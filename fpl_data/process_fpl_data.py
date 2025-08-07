@@ -135,11 +135,10 @@ def add_derived_features(df, fixtures_df=None, teams_data=None):
                                               df.loc[def_mask, 'goals_scored'] * 6 + 
                                               df.loc[def_mask, 'assists'] * 3)
     
-    # Midfielder/Forward attacking threat
-    att_mask = df['element_type'].isin([3, 4])
-    df.loc[att_mask, 'attacking_threat'] = (df.loc[att_mask, 'goals_scored'] + 
-                                          df.loc[att_mask, 'assists'] + 
-                                          df.loc[att_mask, 'expected_goal_involvements'])
+    # Attacking threat for all players (goals + assists + expected goal involvements)
+    df['attacking_threat'] = (df['goals_scored'] + 
+                              df['assists'] + 
+                              df['expected_goal_involvements'])
     
     # === FIXTURE DIFFICULTY (if fixtures data available) ===
     if fixtures_df is not None and teams_data is not None:

@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import json
 import os
 import logging
@@ -318,7 +319,31 @@ def _apply_filters(df: pd.DataFrame, filters: dict) -> pd.DataFrame:
             column = key[4:]  # Remove 'min_' prefix
             if column in df.columns:
                 df[column] = pd.to_numeric(df[column], errors='coerce')
-                mask &= (df[column] >= value)
+                
+                # Special handling for chance_of_playing_next_round
+                if column == 'chance_of_playing_next_round':
+                    # SIMPLIFIED: For now, just use minutes_per_appearance as availability proxy
+                    # Since most chance_of_playing values are null, use minutes as the primary metric
+                    if 'minutes_per_appearance' in df.columns:
+                        df['minutes_per_appearance'] = pd.to_numeric(df['minutes_per_appearance'], errors='coerce')
+                        
+                        # Convert percentage to realistic minutes threshold
+                        if value >= 75:
+                            minutes_threshold = 40
+                        elif value >= 50:
+                            minutes_threshold = 30  
+                        elif value >= 25:
+                            minutes_threshold = 20
+                        else:
+                            minutes_threshold = 10
+                        
+                        # Simple condition: players with good minutes per appearance
+                        mask &= (df['minutes_per_appearance'].fillna(0) >= minutes_threshold)
+                    else:
+                        # Fallback: skip this filter if no minutes data
+                        pass
+                else:
+                    mask &= (df[column] >= value)
         elif key.startswith('max_'):  
             column = key[4:]  # Remove 'max_' prefix
             if column in df.columns:
@@ -421,24 +446,26 @@ def search_players(
     - BASIC: position, team, player_id, status
     - COST: min_price, max_price, budget_enabler_price (exact price)
     - PERFORMANCE: min_total_points, max_total_points, min_form, max_form, min_points_per_game, max_points_per_game
-    - OWNERSHIP: min_ownership, max_ownership (selected_by_percent)
+    - OWNERSHIP: min_selected_by_percent, max_selected_by_percent
     - PLAYING TIME: min_minutes, max_minutes, min_minutes_per_game, max_minutes_per_game
-    - GOALS/ASSISTS: min_goals_scored, max_goals_scored, min_assists, max_assists
+    - GOALS/ASSISTS: min_goals_scored, max_goals_scored, min_assists, max_assists, min_own_goals, max_own_goals
     - VALUE METRICS: min_points_per_million, max_points_per_million, min_form_per_million, max_form_per_million
-    - ADVANCED: min_expected_goals, max_expected_goals, min_expected_assists, max_expected_assists
+    - ADVANCED: min_expected_goals, max_expected_goals, min_expected_assists, max_expected_assists, min_expected_goal_involvements, max_expected_goal_involvements, min_expected_goals_conceded, max_expected_goals_conceded
     - EFFICIENCY: min_points_per_minute, max_points_per_minute, min_goal_involvement_rate, max_goal_involvement_rate
     - OVERPERFORMANCE: min_goals_overperformance, max_goals_overperformance, min_assists_overperformance, max_assists_overperformance
     - LUCK FACTORS: min_goals_luck_factor, max_goals_luck_factor, min_assists_luck_factor, max_assists_luck_factor
-    - FIXTURES: min_avg_fixture_difficulty_3, max_avg_fixture_difficulty_5, min_avg_fixture_difficulty_10, max_avg_fixture_difficulty_10
+    - FIXTURES: min_avg_fixture_difficulty_3, max_avg_fixture_difficulty_3, min_avg_fixture_difficulty_5, max_avg_fixture_difficulty_5, min_avg_fixture_difficulty_10, max_avg_fixture_difficulty_10
     - POSITION SPECIFIC: min_save_percentage, max_save_percentage, min_clean_sheet_rate, max_clean_sheet_rate, min_attacking_threat, max_attacking_threat, min_defensive_value, max_defensive_value
     - PER 90 STATS: min_goals_per_90, max_goals_per_90, min_assists_per_90, max_assists_per_90, min_goal_involvements_per_90, max_goal_involvements_per_90
-    - RANKINGS: min_points_rank_in_position, max_points_rank_in_position, min_value_rank_in_position, max_value_rank_in_position
+    - RANKINGS: min_points_rank_in_position, max_points_rank_in_position, min_value_rank_in_position, max_value_rank_in_position, min_form_rank_in_position, max_form_rank_in_position
     - BOOLEAN FLAGS: is_penalty_taker, is_corner_taker, is_freekick_taker
     - CATEGORIES: ownership_category (Low/Medium/High/Template)
     - ICT INDEX: min_influence, max_influence, min_creativity, max_creativity, min_threat, max_threat, min_ict_index, max_ict_index
     - CARDS: min_yellow_cards, max_yellow_cards, min_red_cards, max_red_cards
-    - GOALKEEPER: min_saves, max_saves, min_goals_conceded, max_goals_conceded
-    - AVAILABILITY: min_chance_of_playing, max_chance_of_playing
+    - GOALKEEPER: min_saves, max_saves, min_goals_conceded, max_goals_conceded, min_penalties_saved, max_penalties_saved
+    - PENALTIES: min_penalties_missed, max_penalties_missed
+    - AVAILABILITY: min_chance_of_playing_next_round, max_chance_of_playing_next_round, can_transact, can_select
+    - CAPTAIN POTENTIAL: min_captain_potential, max_captain_potential
     
     SORTING: 
     - SINGLE COLUMN: sort_by="total_points" (default), "form", "points_per_million", "ownership", etc.
@@ -1069,28 +1096,51 @@ def get_player_details(player_name: str) -> str:
         
         # Clean and search for player
         player_name_clean = player_name.strip().lower()
-        elements_df['name_clean'] = elements_df['web_name'].str.lower()
         
-        # Find player with fuzzy matching
-        exact_match = elements_df[elements_df['name_clean'] == player_name_clean]
-        if exact_match.empty:
-            # Try partial matching
-            partial_matches = elements_df[elements_df['name_clean'].str.contains(player_name_clean, na=False)]
-            if partial_matches.empty:
-                # Try first/last name matching
-                name_parts = player_name_clean.split()
-                if len(name_parts) > 0:
-                    first_name_match = elements_df[elements_df['name_clean'].str.contains(name_parts[0], na=False)]
-                    if not first_name_match.empty:
-                        player = first_name_match.iloc[0]
-                    else:
-                        return f"❌ Player '{player_name}' not found. Please check the spelling or try a different name."
-                else:
-                    return f"❌ Player '{player_name}' not found. Please check the spelling or try a different name."
-            else:
-                player = partial_matches.iloc[0]
+        # Create full name columns for better matching
+        elements_df['full_name'] = (elements_df['first_name'].fillna('') + ' ' + elements_df['second_name'].fillna('')).str.strip()
+        elements_df['full_name_clean'] = elements_df['full_name'].str.lower()
+        elements_df['web_name_clean'] = elements_df['web_name'].str.lower()
+        elements_df['first_name_clean'] = elements_df['first_name'].fillna('').str.lower()
+        elements_df['second_name_clean'] = elements_df['second_name'].fillna('').str.lower()
+        
+        # Find player with improved matching
+        # 1. Try exact full name match
+        exact_full_match = elements_df[elements_df['full_name_clean'] == player_name_clean]
+        if not exact_full_match.empty:
+            player = exact_full_match.iloc[0]
         else:
-            player = exact_match.iloc[0]
+            # 2. Try exact web name match
+            exact_web_match = elements_df[elements_df['web_name_clean'] == player_name_clean]
+            if not exact_web_match.empty:
+                player = exact_web_match.iloc[0]
+            else:
+                # 3. Try partial full name match
+                partial_full_matches = elements_df[elements_df['full_name_clean'].str.contains(player_name_clean, na=False)]
+                if not partial_full_matches.empty:
+                    player = partial_full_matches.iloc[0]
+                else:
+                    # 4. Try partial web name match
+                    partial_web_matches = elements_df[elements_df['web_name_clean'].str.contains(player_name_clean, na=False)]
+                    if not partial_web_matches.empty:
+                        player = partial_web_matches.iloc[0]
+                    else:
+                        # 5. Try individual name parts
+                        name_parts = player_name_clean.split()
+                        if len(name_parts) >= 2:
+                            # Look for players matching first and last name parts
+                            first_part = name_parts[0]
+                            last_part = name_parts[-1]
+                            name_part_matches = elements_df[
+                                (elements_df['first_name_clean'].str.contains(first_part, na=False)) &
+                                (elements_df['second_name_clean'].str.contains(last_part, na=False))
+                            ]
+                            if not name_part_matches.empty:
+                                player = name_part_matches.iloc[0]
+                            else:
+                                return f"❌ Player '{player_name}' not found. Please check the spelling or try a different name."
+                        else:
+                            return f"❌ Player '{player_name}' not found. Please check the spelling or try a different name."
         
         # Get team info
         team_info = teams_dict.get(player['team'], {})

@@ -5,7 +5,8 @@
       "Bash(find:*)",
       "Bash(npm run build:*)",
       "Bash(uv run pytest:*)",
-      "Bash(uv run:*)"
+      "Bash(uv run:*)",
+      "Bash(python3:*)"
     ],
     "deny": []
   }
