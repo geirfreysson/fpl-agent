@@ -630,7 +630,9 @@ def get_player_fixtures(players: str, num_fixtures: int = 5) -> str:
     """
     Get fixture difficulty analysis for specific players by mapping them to their teams.
 
-    IMPORTANT: If you need fixtures for many players, send a comma seperated list of their names.
+    IMPORTANT: If you need fixtures for many players, send a comma seperated list.
+
+    IMPORTANT: If available, send the player's ID instead of their names.
     
     Args:
         players: Comma-separated list of player names or IDs
@@ -685,12 +687,22 @@ def get_player_fixtures(players: str, num_fixtures: int = 5) -> str:
                 player_id = int(player_input)
                 player_row = players_df[players_df['id'] == player_id]
             else:
-                # Search by name (web_name, first_name, or second_name)
+                # Search by name (web_name, first_name, or second_name) with improved matching
+                # First try exact substring match
                 player_row = players_df[
                     players_df['web_name'].str.contains(player_input, case=False, na=False) |
                     players_df['first_name'].str.contains(player_input, case=False, na=False) |
                     players_df['second_name'].str.contains(player_input, case=False, na=False)
                 ]
+                
+                # If no matches, try with normalized spacing (remove spaces and dots)
+                if player_row.empty:
+                    normalized_input = player_input.replace(' ', '').replace('.', '')
+                    player_row = players_df[
+                        players_df['web_name'].str.replace(' ', '').str.replace('.', '').str.contains(normalized_input, case=False, na=False) |
+                        players_df['first_name'].str.replace(' ', '').str.replace('.', '').str.contains(normalized_input, case=False, na=False) |
+                        players_df['second_name'].str.replace(' ', '').str.replace('.', '').str.contains(normalized_input, case=False, na=False)
+                    ]
             
             if not player_row.empty:
                 # Take the first match if multiple found
@@ -841,12 +853,22 @@ def get_player_form(players: str, detailed: bool = False) -> str:
                 player_id = int(player_input)
                 player_row = players_df[players_df['id'] == player_id]
             else:
-                # Search by name (web_name, first_name, or second_name)
+                # Search by name (web_name, first_name, or second_name) with improved matching
+                # First try exact substring match
                 player_row = players_df[
                     players_df['web_name'].str.contains(player_input, case=False, na=False) |
                     players_df['first_name'].str.contains(player_input, case=False, na=False) |
                     players_df['second_name'].str.contains(player_input, case=False, na=False)
                 ]
+                
+                # If no matches, try with normalized spacing (remove spaces and dots)
+                if player_row.empty:
+                    normalized_input = player_input.replace(' ', '').replace('.', '')
+                    player_row = players_df[
+                        players_df['web_name'].str.replace(' ', '').str.replace('.', '').str.contains(normalized_input, case=False, na=False) |
+                        players_df['first_name'].str.replace(' ', '').str.replace('.', '').str.contains(normalized_input, case=False, na=False) |
+                        players_df['second_name'].str.replace(' ', '').str.replace('.', '').str.contains(normalized_input, case=False, na=False)
+                    ]
             
             if not player_row.empty:
                 # Take the first match if multiple found
@@ -1066,13 +1088,13 @@ def get_player_photos(player_names, size="large"):
         ]
 
 @tool
-def get_player_details(player_name: str) -> str:
+def get_player_details(player_identifier: str) -> str:
     """
     Get comprehensive details about a specific player including all statistics, rankings, and tier information.
     This tool provides a complete player profile with performance metrics, value analysis, and position rankings.
     
     Args:
-        player_name: Name of the player to get details for
+        player_identifier: Player name or ID to get details for
     
     Returns:
         String with comprehensive player analysis including tier classification and detailed rankings
@@ -1094,53 +1116,36 @@ def get_player_details(player_name: str) -> str:
         # Create teams lookup
         teams_dict = {team['id']: team for team in teams_data}
         
-        # Clean and search for player
-        player_name_clean = player_name.strip().lower()
+        # Parse player input (could be ID or name) - same logic as get_player_fixtures
+        player_input = player_identifier.strip()
         
-        # Create full name columns for better matching
-        elements_df['full_name'] = (elements_df['first_name'].fillna('') + ' ' + elements_df['second_name'].fillna('')).str.strip()
-        elements_df['full_name_clean'] = elements_df['full_name'].str.lower()
-        elements_df['web_name_clean'] = elements_df['web_name'].str.lower()
-        elements_df['first_name_clean'] = elements_df['first_name'].fillna('').str.lower()
-        elements_df['second_name_clean'] = elements_df['second_name'].fillna('').str.lower()
-        
-        # Find player with improved matching
-        # 1. Try exact full name match
-        exact_full_match = elements_df[elements_df['full_name_clean'] == player_name_clean]
-        if not exact_full_match.empty:
-            player = exact_full_match.iloc[0]
+        # Try to find by ID first
+        if player_input.isdigit():
+            player_id = int(player_input)
+            player_row = elements_df[elements_df['id'] == player_id]
         else:
-            # 2. Try exact web name match
-            exact_web_match = elements_df[elements_df['web_name_clean'] == player_name_clean]
-            if not exact_web_match.empty:
-                player = exact_web_match.iloc[0]
-            else:
-                # 3. Try partial full name match
-                partial_full_matches = elements_df[elements_df['full_name_clean'].str.contains(player_name_clean, na=False)]
-                if not partial_full_matches.empty:
-                    player = partial_full_matches.iloc[0]
-                else:
-                    # 4. Try partial web name match
-                    partial_web_matches = elements_df[elements_df['web_name_clean'].str.contains(player_name_clean, na=False)]
-                    if not partial_web_matches.empty:
-                        player = partial_web_matches.iloc[0]
-                    else:
-                        # 5. Try individual name parts
-                        name_parts = player_name_clean.split()
-                        if len(name_parts) >= 2:
-                            # Look for players matching first and last name parts
-                            first_part = name_parts[0]
-                            last_part = name_parts[-1]
-                            name_part_matches = elements_df[
-                                (elements_df['first_name_clean'].str.contains(first_part, na=False)) &
-                                (elements_df['second_name_clean'].str.contains(last_part, na=False))
-                            ]
-                            if not name_part_matches.empty:
-                                player = name_part_matches.iloc[0]
-                            else:
-                                return f"❌ Player '{player_name}' not found. Please check the spelling or try a different name."
-                        else:
-                            return f"❌ Player '{player_name}' not found. Please check the spelling or try a different name."
+            # Search by name (web_name, first_name, or second_name) with improved matching
+            # First try exact substring match
+            player_row = elements_df[
+                elements_df['web_name'].str.contains(player_input, case=False, na=False) |
+                elements_df['first_name'].str.contains(player_input, case=False, na=False) |
+                elements_df['second_name'].str.contains(player_input, case=False, na=False)
+            ]
+            
+            # If no matches, try with normalized spacing (remove spaces and dots)
+            if player_row.empty:
+                normalized_input = player_input.replace(' ', '').replace('.', '')
+                player_row = elements_df[
+                    elements_df['web_name'].str.replace(' ', '').str.replace('.', '').str.contains(normalized_input, case=False, na=False) |
+                    elements_df['first_name'].str.replace(' ', '').str.replace('.', '').str.contains(normalized_input, case=False, na=False) |
+                    elements_df['second_name'].str.replace(' ', '').str.replace('.', '').str.contains(normalized_input, case=False, na=False)
+                ]
+        
+        if player_row.empty:
+            return f"❌ Player '{player_identifier}' not found. Please check the spelling or try a different name/ID."
+        
+        # Take the first match if multiple found
+        player = player_row.iloc[0]
         
         # Get team info
         team_info = teams_dict.get(player['team'], {})
@@ -1220,7 +1225,7 @@ def get_player_details(player_name: str) -> str:
         return result
         
     except Exception as e:
-        error_msg = f"Error getting player details for '{player_name}': {str(e)}"
+        error_msg = f"Error getting player details for '{player_identifier}': {str(e)}"
         logging.error(f"Error in get_player_details: {e}")
         logging.error(traceback.format_exc())
         return error_msg.replace('"', "'").replace('\\', '/').replace('\r', '').replace('\x00', '')
@@ -1349,7 +1354,7 @@ def find_player_replacements(player_name: str, key_attributes: dict, price_toler
     """
     Find replacement players based on specified key attributes using search_players.
     The AI should analyze the target player first and provide key attributes to search for.
-    IMPORTANT: Always use get_player_detail first for the player to be replaced.
+    IMPORTANT: Always use get_player_details first for the player to be replaced.
     Args:
         player_name: Name of the player to find replacements for (used for display)
         key_attributes: Dictionary of key attributes with their values, e.g.:
