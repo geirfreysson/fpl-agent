@@ -128,9 +128,6 @@ export const EnhancedText: TextContentPartComponent = (props) => {
     
     // After processing tool calls, check if there's additional text (final answer)
     const finalAnswerText = text.slice(lastToolCallEnd).trim();
-    console.log("🔍 DEBUG finalAnswerText:", JSON.stringify(finalAnswerText));
-    console.log("🔍 DEBUG finalAnswerText length:", finalAnswerText.length);
-    console.log("🔍 DEBUG finalAnswerText preview:", finalAnswerText.substring(0, 100));
     
     if (finalAnswerText && !finalAnswerText.includes('__TOOL_CALL__:')) {
       renderedParts.push(

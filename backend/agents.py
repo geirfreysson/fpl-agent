@@ -38,7 +38,7 @@ def create_agent(conversation_history: List[Dict[str, Any]] = None):
     """
 
     agent = ToolCallingAgent(
-        tools=[help, get_weather, search_players, get_player_fixtures, get_player_details, find_player_replacements],
+        tools=[help, search_players, get_player_fixtures, get_player_details, find_player_replacements],
         model=model,
         stream_outputs=True,  # Enable streaming to get ToolCall/ToolOutput events
         instructions=instructions
