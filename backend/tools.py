@@ -1382,30 +1382,84 @@ def find_player_replacements(player_name: str, key_attributes: dict, price_toler
                 search_params['max_price'] = target_price + price_tolerance
                 del search_params['price']  # Remove target price, keep range
         
-        # Use search_players to find candidates
-        search_results = search_players(
-            limit=max_suggestions,
-            sort_by="total_points",
-            ascending=False,
-            filters=search_params
-        )
+        # Progressive relaxation of filters if we get too few results
+        current_filters = search_params.copy()
+        relaxation_factors = [1.0, 0.8, 0.6, 0.4]  # Progressive relaxation steps
         
-        if "No players found" in search_results or "Error" in search_results:
-            # Fallback with just position and price range
-            fallback_filters = {}
-            if 'position' in search_params:
-                fallback_filters['position'] = search_params['position']
-            if 'min_price' in search_params:
-                fallback_filters['min_price'] = search_params['min_price']
-            if 'max_price' in search_params:
-                fallback_filters['max_price'] = search_params['max_price']
-                
+        for factor in relaxation_factors:
             search_results = search_players(
-                limit=max_suggestions,
+                limit=max_suggestions * 2,
                 sort_by="total_points",
+                ascending=False,
+                filters=current_filters
+            )
+            
+            # Count actual player results
+            result_count = len([line for line in search_results.split('\n') if line.strip() and line[0].isdigit()])
+            
+            # If we have enough results, break
+            if result_count > 1:
+                break
+                
+            # If we hit actual "no results" error, continue to next relaxation
+            if "No players found" in search_results or "Error" in search_results:
+                continue
+                
+            # Prepare relaxed filters for next iteration
+            current_filters = {}
+            # Always keep position and price range
+            if 'position' in search_params:
+                current_filters['position'] = search_params['position']
+            if 'min_price' in search_params:
+                current_filters['min_price'] = search_params['min_price']
+            if 'max_price' in search_params:
+                current_filters['max_price'] = search_params['max_price']
+            
+            # Apply relaxation to performance filters
+            for key in ['min_total_points', 'min_form', 'min_points_per_game', 'min_points_per_million', 
+                       'min_minutes', 'min_influence', 'min_expected_goals', 'min_assists']:
+                if key in search_params and search_params[key] > 0:
+                    current_filters[key] = search_params[key] * factor
+        
+        # Final fallback: if still no results, expand price range for premium players
+        result_count = len([line for line in search_results.split('\n') if line.strip() and line[0].isdigit()])
+        if result_count <= 1 and 'min_price' in search_params and search_params['min_price'] > 10:
+            # Premium player - expand price range
+            fallback_filters = {'position': search_params.get('position')}
+            price_expansion = 2.0  # £2m expansion for premium players
+            fallback_filters['min_price'] = max(4.0, search_params['min_price'] - price_expansion)
+            if 'max_price' in search_params:
+                fallback_filters['max_price'] = search_params['max_price'] + price_expansion
+            
+            search_results = search_players(
+                limit=max_suggestions * 2,
+                sort_by="total_points", 
                 ascending=False,
                 filters=fallback_filters
             )
+            
+            # Last resort: try switching position for attacking players (MID ↔ FWD)
+            result_count = len([line for line in search_results.split('\n') if line.strip() and line[0].isdigit()])
+            if result_count <= 1 and search_params.get('position') in ['MID', 'FWD']:
+                # Switch attacking positions as last resort
+                alt_position = 'FWD' if search_params.get('position') == 'MID' else 'MID'
+                alt_filters = {
+                    'position': alt_position,
+                    'min_price': max(4.0, search_params['min_price'] - price_expansion),
+                }
+                if 'max_price' in search_params:
+                    alt_filters['max_price'] = search_params['max_price'] + price_expansion
+                
+                # Use very relaxed performance criteria for position switch
+                if 'min_total_points' in search_params:
+                    alt_filters['min_total_points'] = search_params['min_total_points'] * 0.5
+                
+                search_results = search_players(
+                    limit=max_suggestions * 2,
+                    sort_by="total_points",
+                    ascending=False,
+                    filters=alt_filters
+                )
         
         # Format the replacement analysis
         result_lines = []

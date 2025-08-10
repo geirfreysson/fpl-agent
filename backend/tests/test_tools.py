@@ -1546,3 +1546,36 @@ def test_search_players_output_format_consistency():
         
     finally:
         os.chdir(original_dir)
+
+def test_player_replacement_mbeumo():
+    params = {
+        "player_name": "Mbeumo",
+        "key_attributes": {
+            "position": "MID",
+            "min_price": 7,
+            "max_price": 9,
+            "min_total_points": 200,
+            "min_form": 0
+        },
+        "price_tolerance": 1,
+        "max_suggestions": 3
+        }
+    result = find_player_replacements(params)
+    print(result)
+
+def test_player_replacement_salah():
+    params = {
+        "player_name": "Salah",
+        "key_attributes": {
+            "position": "MID",
+            "min_price": 13.5,
+            "max_price": 15,
+            "min_total_points": 300,
+            "min_minutes": 3200,
+            "min_influence": 1500
+        },
+        "price_tolerance": 1,
+        "max_suggestions": 5
+        }
+    result = find_player_replacements(params)
+    print(result)
