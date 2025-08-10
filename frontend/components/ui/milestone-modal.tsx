@@ -81,7 +81,7 @@ export function MilestoneModal({ isOpen, onClose, messageCount }: MilestoneModal
           </h2>
           <div className="flex items-center gap-2 text-muted-foreground mb-6">
             <Sparkles className="w-4 h-4" />
-            <span className="text-sm">You've sent {messageCount} messages to the FPL Agent!</span>
+            <span className="text-sm">You&apos;ve sent {messageCount} messages to the FPL Agent!</span>
             <Sparkles className="w-4 h-4" />
           </div>
         </div>
@@ -89,7 +89,7 @@ export function MilestoneModal({ isOpen, onClose, messageCount }: MilestoneModal
         {/* Content */}
         <div className="px-6 pb-8 sm:pb-6">
           <div className="space-y-4">
-            <p>This free FPL tool costs money to run - each AI response adds up. If it's helping your game, a beer would keep the lights on!</p>
+            <p>This free FPL tool costs money to run - each AI response adds up. If it&apos;s helping your game, a beer would keep the lights on!</p>
 
           </div>
 
@@ -106,7 +106,7 @@ export function MilestoneModal({ isOpen, onClose, messageCount }: MilestoneModal
                 color: 'white'
               }}
             >
-              Of course I'll buy you a beer!
+              Of course I&apos;ll buy you a beer!
             </Button>
             <Button 
               variant="outline" 
