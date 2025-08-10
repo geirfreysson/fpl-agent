@@ -37,10 +37,10 @@ export function MilestoneModal({ isOpen, onClose, messageCount }: MilestoneModal
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
       <div 
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-in fade-in-0" 
+        className="absolute inset-0 bg-black/50 animate-in fade-in-0" 
         onClick={onClose}
       />
       
@@ -57,13 +57,29 @@ export function MilestoneModal({ isOpen, onClose, messageCount }: MilestoneModal
 
         {/* Header */}
         <div className="flex flex-col items-center justify-center pt-8 pb-4 px-6">
-          <div className="flex items-center justify-center w-16 h-16 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full mb-4 animate-pulse">
-            <Trophy className="w-8 h-8 text-white" />
+          <div 
+            className="flex items-center justify-center w-16 h-16 rounded-full mb-4 animate-pulse"
+            style={{
+              background: 'linear-gradient(to right, #a855f7, #ec4899)',
+              width: '64px',
+              height: '64px'
+            }}
+          >
+            <Trophy 
+              className="text-white" 
+              size={32}
+              style={{
+                width: '32px',
+                height: '32px',
+                color: 'white',
+                fill: 'currentColor'
+              }}
+            />
           </div>
           <h2 className="text-2xl font-bold text-center mb-2 bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
             Consider buying me a beer!
           </h2>
-          <div className="flex items-center gap-2 text-muted-foreground">
+          <div className="flex items-center gap-2 text-muted-foreground mb-6">
             <Sparkles className="w-4 h-4" />
             <span className="text-sm">You've sent {messageCount} messages to the FPL Agent!</span>
             <Sparkles className="w-4 h-4" />
@@ -71,23 +87,24 @@ export function MilestoneModal({ isOpen, onClose, messageCount }: MilestoneModal
         </div>
 
         {/* Content */}
-        <div className="px-6 pb-6">
+        <div className="px-6 pb-8 sm:pb-6">
           <div className="space-y-4">
-            <p className="text-muted-foreground">
-              FPL With Robots is a hobby project and I want it to stay free to use. If you find it useful, please consider buying me a beer. 
-            </p>
-            <p className="text-muted-foreground">
-            The Agent uses OpenAI’s ChatGPT to generate responses, and <b>each time the agent sends a message to ChatGPT, it costs money.</b>            </p>
+            <p>This free FPL tool costs money to run - each AI response adds up. If it's helping your game, a beer would keep the lights on!</p>
+
           </div>
 
           {/* Action buttons */}
-          <div className="flex flex-col gap-2 mt-6">
+          <div className="flex flex-col gap-2 mt-6" style={{ paddingBottom: '1rem' }}>
             <Button 
               onClick={() => {
                 window.open('https://buymeacoffee.com/geirfreysson', '_blank');
                 onClose();
               }}
-              className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+              className="w-full bg-purple-600 hover:bg-purple-700 text-white font-medium"
+              style={{
+                background: 'linear-gradient(to right, #9333ea, #db2777)',
+                color: 'white'
+              }}
             >
               Of course I'll buy you a beer!
             </Button>
