@@ -18,7 +18,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class FPLDataCollector:
-    def __init__(self, data_dir: str = "fpl_data"):
+    def __init__(self, data_dir: str = "fpl_data/fpl_data"):
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(exist_ok=True)
         self.base_url = "https://fantasy.premierleague.com/api"
