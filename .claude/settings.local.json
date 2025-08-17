@@ -9,7 +9,11 @@
       "Bash(python3:*)",
       "WebSearch",
       "Bash(npm view:*)",
-      "WebFetch(domain:www.npmjs.com)"
+      "WebFetch(domain:www.npmjs.com)",
+      "Bash(npm update)",
+      "Bash(npm ls:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(npx next build:*)"
     ],
     "deny": []
   }
