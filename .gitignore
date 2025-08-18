@@ -70,7 +70,7 @@ __pycache__/
 ai-docs/
 
 # Lock files (optional - some prefer to include them)
-package-lock.json
+# package-lock.json
 
 # FPL data
 fpl_data/*.json
