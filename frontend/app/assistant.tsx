@@ -1,6 +1,7 @@
 "use client";
 
-import { AssistantRuntimeProvider, useThread, useLocalRuntime } from "@assistant-ui/react";
+import { AssistantRuntimeProvider, useThread } from "@assistant-ui/react";
+import { useChatRuntime } from "@assistant-ui/react-ai-sdk";
 import { Thread } from "@/components/assistant-ui/thread";
 import { UserButton, useAuth } from "@clerk/nextjs";
 import Image from "next/image";
@@ -48,69 +49,27 @@ export const Assistant = () => {
   const { getToken, isSignedIn } = useAuth();
   const { messageCount, showModal, incrementCounter, closeModal } = useMessageCounter();
   
-  const runtime = useLocalRuntime({
-    run: async ({ messages, abortSignal }) => {
+  const runtime = useChatRuntime({
+    api: "/api/chat",
+    headers: async (): Promise<Record<string, string>> => {
       if (!isSignedIn) {
-        throw new Error("Not signed in");
+        return {};
       }
       
       const token = await getToken();
       if (!token) {
-        throw new Error("No auth token");
-      }
-
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-        },
-        body: JSON.stringify({ messages }),
-        signal: abortSignal,
-      });
-
-      if (!response.ok) {
-        throw new Error(`API responded with status: ${response.status}`);
-      }
-
-      if (!response.body) {
-        throw new Error("No response body");
-      }
-
-      // Parse the streaming response from the API
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let fullText = "";
-      
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split('\n');
-          
-          for (const line of lines) {
-            if (line.startsWith('0:')) {
-              try {
-                const content = JSON.parse(line.slice(2));
-                if (typeof content === 'string') {
-                  fullText += content;
-                }
-              } catch {
-                // Skip malformed lines
-              }
-            }
-          }
-        }
-      } finally {
-        reader.releaseLock();
+        return {};
       }
       
       return {
-        content: [{ type: "text", text: fullText }],
+        "Authorization": `Bearer ${token}`,
       };
-    }
+    },
+    onFinish: () => {
+      // Increment counter when assistant completes a response
+      console.log('onFinish callback triggered');
+      incrementCounter();
+    },
   });
 
   return (
