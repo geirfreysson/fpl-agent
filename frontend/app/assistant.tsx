@@ -5,9 +5,12 @@ import { useChatRuntime } from "@assistant-ui/react-ai-sdk";
 import { Thread } from "@/components/assistant-ui/thread";
 import { UserButton, useAuth } from "@clerk/nextjs";
 import Image from "next/image";
+import Link from "next/link";
 import { useMessageCounter } from "@/hooks/use-message-counter";
 import { MilestoneModal } from "@/components/ui/milestone-modal";
+import { VersionTracker } from "@/components/version-tracker";
 import { useEffect, useRef } from "react";
+import { Bookmark } from "lucide-react";
 // Commented out for simple layout - uncomment to restore sidebar functionality
 // import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 // import { AppSidebar } from "@/components/app-sidebar";
@@ -75,6 +78,7 @@ export const Assistant = () => {
   return (
     <AssistantRuntimeProvider runtime={runtime}>
       <MessageMonitor incrementCounter={incrementCounter} />
+      <VersionTracker />
       <div className="relative h-screen flex flex-col">
         {/* Header with branding and sign out button */}
         <header className="flex items-center justify-between p-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
@@ -93,14 +97,23 @@ export const Assistant = () => {
               Your Fantasy Premier League AI Assistant
             </div>
           </div>
-          <UserButton 
-            appearance={{
-              elements: {
-                avatarBox: "w-10 h-10"
-              }
-            }}
-            showName={false}
-          />
+          <div className="flex items-center gap-3">
+            <Link 
+              href="/releases" 
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
+            >
+              <Bookmark className="w-4 h-4" />
+              <span className="hidden sm:inline">Releases</span>
+            </Link>
+            <UserButton 
+              appearance={{
+                elements: {
+                  avatarBox: "w-10 h-10"
+                }
+              }}
+              showName={false}
+            />
+          </div>
         </header>
         <div className="flex-1 overflow-hidden">
           <Thread />

@@ -11,6 +11,7 @@ const TOOL_DISPLAY_NAMES: Record<string, string> = {
   get_player_details: "Analyzed player details",
   get_player_form: "Analyzed player form",
   find_player_replacements: "Found player replacements",
+  suggest_captain: "Analysed potential captains",
   
   // Fixture analysis
   get_easiest_fixtures: "Analyzed fixture difficulty",

@@ -1,0 +1,20 @@
+{
+  "currentVersion": 3,
+  "releases": {
+    "3": {
+      "title": "New captain selection algorithm",
+      "date": "2025-01-09",
+      "content": "## New Features\n\n- Captain selection is now more powerful. It selects three potential captains. \n- New Releases page."
+    },
+    "2": {
+      "title": "Release 2",
+      "date": "2024-12-15",
+      "content": "## New Features\n\n- Added transfer suggestions based on upcoming fixtures\n- Implemented player comparison tool\n\n\n## Improvements\n\n- Enhanced mobile responsiveness\n- Better error handling\n\n"
+    },
+    "1": {
+      "title": "Release 1",
+      "date": "2024-11-20",
+      "content": "## Initial Release\n\n- Basic FPL agent functionality\n- Player search and analysis\n- Fixture difficulty assessment\n- Simple recommendations\n\n## Features\n\n- Chat-based interface\n- Real-time FPL data integration\n- User authentication with Clerk\n- Responsive design"
+    }
+  }
+}
