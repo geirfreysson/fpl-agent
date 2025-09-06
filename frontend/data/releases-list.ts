@@ -9,6 +9,7 @@ export default {
 - Enhanced captain selection algorithm with weighted scoring system
 - Fix player replacement algorithm to prioritise players with easy fixtures 
 - New Releases page for tracking updates
+- Fix sorting when we want to sort both ascending and descending
 
 ## Captain Selection Algorithm
 

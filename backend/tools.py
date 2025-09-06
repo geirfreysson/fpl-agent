@@ -395,7 +395,7 @@ def _apply_filters(df: pd.DataFrame, filters: dict) -> pd.DataFrame:
     return df[mask]
 
 def _sort_results(df: pd.DataFrame, sort_by: list, ascending: list) -> pd.DataFrame:
-    """Use pandas' native multi-column sorting with fallback handling"""
+    """Use pandas' native multi-column sorting with fallback handling and smart defaults for multi-column sorts"""
     fallback_map = {
         'price': 'now_cost',
         'cost': 'now_cost',
@@ -403,19 +403,45 @@ def _sort_results(df: pd.DataFrame, sort_by: list, ascending: list) -> pd.DataFr
         'name': 'web_name'
     }
 
+    # Performance metrics that should always be sorted descending (higher is better)
+    # Only applied when sorting by multiple columns
+    performance_metrics = {
+        'total_points', 'form', 'points_per_game', 'points_per_million', 'form_per_million',
+        'goals_scored', 'assists', 'expected_goals', 'expected_assists', 'expected_goal_involvements',
+        'ict_index', 'influence', 'creativity', 'threat', 'bonus', 'bps',
+        'saves', 'clean_sheets', 'minutes', 'minutes_per_game',
+        'goals_per_90', 'assists_per_90', 'goal_involvements_per_90',
+        'save_percentage', 'attacking_threat', 'defensive_value',
+        'goals_overperformance', 'assists_overperformance'
+    }
+
     valid_sort_columns = []
     valid_ascending = []
+    is_multi_column = len(sort_by) > 1
 
     for i, col in enumerate(sort_by):
         if col in df.columns:
             valid_sort_columns.append(col)
-            valid_ascending.append(ascending[i])
+            # Apply smart defaults only for multi-column sorting
+            if is_multi_column and col in performance_metrics:
+                valid_ascending.append(False)  # Performance metrics always descending
+            else:
+                valid_ascending.append(ascending[i])  # Use provided direction
         elif col in fallback_map and fallback_map[col] in df.columns:
-            valid_sort_columns.append(fallback_map[col])
-            valid_ascending.append(ascending[i])
+            mapped_col = fallback_map[col]
+            valid_sort_columns.append(mapped_col)
+            # Apply smart defaults only for multi-column sorting
+            if is_multi_column and mapped_col in performance_metrics:
+                valid_ascending.append(False)  # Performance metrics always descending
+            else:
+                valid_ascending.append(ascending[i])  # Use provided direction
         elif 'total_points' in df.columns:  # Fallback to total_points
             valid_sort_columns.append('total_points')
-            valid_ascending.append(ascending[i])
+            # Apply smart defaults only for multi-column sorting
+            if is_multi_column:
+                valid_ascending.append(False)  # total_points always descending in multi-column
+            else:
+                valid_ascending.append(ascending[i])  # Use provided direction
 
     if not valid_sort_columns:
         return df  # Return unsorted if no valid columns
@@ -469,8 +495,12 @@ def search_players(
 
     SORTING:
     - SINGLE COLUMN: sort_by="total_points" (default), "form", "points_per_million", "ownership", etc.
+      Uses the ascending parameter exactly as specified by user
     - MULTI-COLUMN: sort_by="selected_by_percent,total_points" (comma-separated, first=primary sort)
-    - For requests like "low ownership but high points", use: sort_by="selected_by_percent,total_points" with ascending=True for ownership, False for points
+      Automatically applies smart defaults: performance metrics (points, form, goals, etc.) always sort descending,
+      while ownership/difficulty metrics respect the ascending parameter
+    - For requests like "low ownership but high points", use: sort_by="selected_by_percent,total_points" with ascending=True
+      This will sort ownership ascending (low first) and points descending (high first) automatically
     - All column names from elements.parquet are valid sort options including enhanced features
 
     Args:
@@ -488,9 +518,9 @@ def search_players(
         search_players(sort_by="points_per_million", limit=5)
         search_players(filters={"position": "MID", "max_price": 8.0, "min_form": 5.0})
 
-        # Multi-column sorting for complex requests
-        search_players(sort_by="selected_by_percent,total_points", ascending=True, limit=5)  # Low ownership, high points
-        search_players(sort_by="form,points_per_million", filters={"position": "FWD"})  # Best form forwards, then by value
+        # Multi-column sorting for complex requests (smart defaults applied automatically)
+        search_players(sort_by="selected_by_percent,total_points", ascending=True, limit=5)  # Low ownership (asc), high points (desc)
+        search_players(sort_by="form,points_per_million", filters={"position": "FWD"})  # Best form (desc), then by value (desc)
 
         # Advanced filtering with enhanced features
         search_players(filters={"position": "DEF", "is_penalty_taker": True, "max_avg_fixture_difficulty_5": 3.0})
