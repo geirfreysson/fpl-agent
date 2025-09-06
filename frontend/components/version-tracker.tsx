@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { toast } from 'sonner';
-import releases from '@/data/releases';
+import releases from '@/data/releases-list';
 
 export const VersionTracker = () => {
   useEffect(() => {

@@ -3,7 +3,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import Link from "next/link";
 import { Calendar, Star, ArrowLeft } from "lucide-react";
-import releases from "@/data/releases";
+import releases from "@/data/releases-list";
 
 export default function ReleasesPage() {
   const sortedReleases = Object.entries(releases.releases)
