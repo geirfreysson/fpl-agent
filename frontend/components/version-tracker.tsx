@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { toast } from 'sonner';
-import releases from '@/data/releases.json';
+import releases from '@/data/releases';
 
 export const VersionTracker = () => {
   useEffect(() => {
@@ -11,7 +11,18 @@ export const VersionTracker = () => {
       const lastVersionSeen = localStorage.getItem('lastVersionSeen');
       
       if (!lastVersionSeen) {
-        // First time user, set current version as seen
+        // First time user, show toast and set current version as seen
+        const currentRelease = releases.releases[currentVersion.toString()];
+        const releaseTitle = currentRelease?.title || `Release ${currentVersion}`;
+        
+        toast.success(`New release: ${releaseTitle} 🎉🎉🎉`, {
+          duration: 10000,
+          action: {
+            label: 'View',
+            onClick: () => window.open('/releases', '_blank')
+          }
+        });
+        
         localStorage.setItem('lastVersionSeen', currentVersion.toString());
         return;
       }

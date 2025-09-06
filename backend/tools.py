@@ -1355,6 +1355,10 @@ def find_player_replacements(player_name: str, key_attributes: dict, price_toler
     Find replacement players based on specified key attributes using search_players.
     The AI should analyze the target player first and provide key attributes to search for.
     IMPORTANT: Always use get_player_details first for the player to be replaced.
+    
+    FIXTURE-AWARE: Automatically prioritizes players with easy upcoming fixtures (max 5-game avg difficulty: 3.0)
+    unless fixture difficulty preferences are explicitly specified in key_attributes.
+    
     Args:
         player_name: Name of the player to find replacements for (used for display)
         key_attributes: Dictionary of key attributes with their values, e.g.:
@@ -1364,7 +1368,7 @@ def find_player_replacements(player_name: str, key_attributes: dict, price_toler
         max_suggestions: Number of replacement suggestions to return (default: 3)
 
     Returns:
-        String with player replacement suggestions based on the specified key attributes
+        String with player replacement suggestions prioritized by fixture difficulty, then performance
     """
     try:
         # Use key_attributes directly as search parameters
@@ -1382,15 +1386,23 @@ def find_player_replacements(player_name: str, key_attributes: dict, price_toler
                 search_params['max_price'] = target_price + price_tolerance
                 del search_params['price']  # Remove target price, keep range
 
+        # Add fixture difficulty as a default factor (unless user specified fixture preferences)
+        fixture_keys = ['max_avg_fixture_difficulty_3', 'max_avg_fixture_difficulty_5', 'max_avg_fixture_difficulty_10',
+                       'min_avg_fixture_difficulty_3', 'min_avg_fixture_difficulty_5', 'min_avg_fixture_difficulty_10']
+        if not any(key in search_params for key in fixture_keys):
+            # Default to players with reasonably easy 5-game fixtures (threshold: 3.0)
+            search_params['max_avg_fixture_difficulty_5'] = 3.0
+
         # Progressive relaxation of filters if we get too few results
         current_filters = search_params.copy()
         relaxation_factors = [1.0, 0.8, 0.6, 0.4]  # Progressive relaxation steps
 
         for factor in relaxation_factors:
+            # Sort by fixture difficulty first, then total points (easier fixtures = better)
             search_results = search_players(
                 limit=max_suggestions * 2,
-                sort_by="total_points",
-                ascending=False,
+                sort_by="avg_fixture_difficulty_5,total_points",
+                ascending=True,  # Easy fixtures first (ascending fixture difficulty)
                 filters=current_filters
             )
 
@@ -1420,6 +1432,13 @@ def find_player_replacements(player_name: str, key_attributes: dict, price_toler
                        'min_minutes', 'min_influence', 'min_expected_goals', 'min_assists']:
                 if key in search_params and search_params[key] > 0:
                     current_filters[key] = search_params[key] * factor
+            
+            # Apply relaxation to fixture difficulty (increase max threshold to be more lenient)
+            for key in ['max_avg_fixture_difficulty_3', 'max_avg_fixture_difficulty_5', 'max_avg_fixture_difficulty_10']:
+                if key in search_params:
+                    # Relax by increasing the max difficulty threshold (3.0 -> 3.2 -> 3.4 -> 3.6)
+                    relaxation_increase = (1.0 - factor) * 0.8  # Scale increase: 0 -> 0.16 -> 0.32 -> 0.48
+                    current_filters[key] = search_params[key] + relaxation_increase
 
         # Final fallback: if still no results, expand price range for premium players
         result_count = len([line for line in search_results.split('\n') if line.strip() and line[0].isdigit()])
@@ -1433,8 +1452,8 @@ def find_player_replacements(player_name: str, key_attributes: dict, price_toler
 
             search_results = search_players(
                 limit=max_suggestions * 2,
-                sort_by="total_points",
-                ascending=False,
+                sort_by="avg_fixture_difficulty_5,total_points",
+                ascending=True,  # Easy fixtures first
                 filters=fallback_filters
             )
 
@@ -1456,8 +1475,8 @@ def find_player_replacements(player_name: str, key_attributes: dict, price_toler
 
                 search_results = search_players(
                     limit=max_suggestions * 2,
-                    sort_by="total_points",
-                    ascending=False,
+                    sort_by="avg_fixture_difficulty_5,total_points",
+                    ascending=True,  # Easy fixtures first
                     filters=alt_filters
                 )
 
@@ -1518,6 +1537,8 @@ def suggest_captain(
     """
     🎯 Captain Selector - Suggest captain options for the current gameweek based on form, total points, and early season performance.
 
+    IMPORTANT: Explain to the user that the captain score is on the scale of 1-100.
+
     Captain selection criteria:
     - Good recent form (last 5 games average)
     - Strong total points this season
@@ -1555,6 +1576,7 @@ def suggest_captain(
         elements_path = os.path.join(project_root, 'fpl_data', 'fpl_data', 'elements.parquet')
         teams_path = os.path.join(project_root, 'fpl_data', 'fpl_data', 'teams.json')
         history_path = os.path.join(project_root, 'fpl_data', 'fpl_data', 'player_history_past.parquet')
+        fixtures_path = os.path.join(project_root, 'fpl_data', 'fpl_data', 'fixtures.parquet')
 
         # Load player data - select captain-relevant columns
         captain_columns = ['id', 'web_name', 'first_name', 'second_name', 'team', 'element_type',
@@ -1572,6 +1594,11 @@ def suggest_captain(
         with open(teams_path, 'r') as f:
             teams_data = json.load(f)
         team_lookup = {team['id']: team['name'] for team in teams_data}
+        team_short_name_lookup = {team['id']: team['short_name'] for team in teams_data}
+
+        # Load fixtures data
+        fixtures_df = pd.read_parquet(fixtures_path, columns=['team_h', 'team_a', 'event', 'finished'])
+        upcoming_fixtures = fixtures_df[fixtures_df['finished'] == False].sort_values('event')
 
         # Convert string columns to numeric
         numeric_cols = ['form', 'points_per_game', 'selected_by_percent', 'expected_goals',
@@ -1596,10 +1623,14 @@ def suggest_captain(
             consider_early_season = is_early_season
 
         # Filter for potential captains - exclude goalkeepers and very cheap players
+        # Adjust minutes threshold based on max minutes available (for early season)
+        max_minutes = elements_df['minutes'].max()
+        min_minutes_threshold = min(200, max_minutes * 0.5) if max_minutes > 0 else 50
+        
         captain_candidates = elements_df[
             (elements_df['element_type'].isin([2, 3, 4])) &  # DEF, MID, FWD only
             (elements_df['now_cost'] >= 60) &  # £6m+ only (serious captain options)
-            (elements_df['minutes'] > 200)  # Must have reasonable playing time
+            (elements_df['minutes'] > min_minutes_threshold)  # Must have reasonable playing time
         ].copy()
 
         if captain_candidates.empty:
@@ -1630,11 +1661,16 @@ def suggest_captain(
                 captain_candidates['xgi_score'] = (captain_candidates['expected_goal_involvements'] / max_xgi) * 100
                 captain_candidates['captain_score'] += captain_candidates['xgi_score'] * attacking_weight
 
-        # Factor 4: Fixture difficulty bonus - easier fixtures = higher score
-        if 'avg_fixture_difficulty_3' in captain_candidates.columns:
-            captain_candidates['avg_fixture_difficulty_3'] = captain_candidates['avg_fixture_difficulty_3'].fillna(3.0)
+        # Factor 4: Next fixture difficulty bonus - easier next fixture = higher score
+        if 'next_fixture_difficulty' in captain_candidates.columns:
+            captain_candidates['next_fixture_difficulty'] = captain_candidates['next_fixture_difficulty'].fillna(3.0)
             # Invert fixture difficulty (easier = better for captains)
-            captain_candidates['fixture_score'] = (5.0 - captain_candidates['avg_fixture_difficulty_3']) * 20  # Scale to 0-40
+            captain_candidates['fixture_score'] = (5.0 - captain_candidates['next_fixture_difficulty']) * 25  # Scale to 0-100
+            captain_candidates['captain_score'] += captain_candidates['fixture_score'] * fixture_weight
+        elif 'avg_fixture_difficulty_3' in captain_candidates.columns:
+            # Fallback to 3-game average if next fixture difficulty not available
+            captain_candidates['avg_fixture_difficulty_3'] = captain_candidates['avg_fixture_difficulty_3'].fillna(3.0)
+            captain_candidates['fixture_score'] = (5.0 - captain_candidates['avg_fixture_difficulty_3']) * 25  # Scale to 0-100
             captain_candidates['captain_score'] += captain_candidates['fixture_score'] * fixture_weight
 
         # Factor 5: Early season bonus from previous season
@@ -1663,16 +1699,38 @@ def suggest_captain(
                 pass  # Skip if historical data not available
 
         # Sort by captain score and get top candidates
-        top_captains = captain_candidates.nlargest(limit, 'captain_score')
+        top_captains = captain_candidates.nlargest(limit, 'captain_score').copy()
 
         if top_captains.empty:
             return "No captain candidates found after scoring analysis."
+
+        # Get next opponent
+        next_opponents = []
+        for _, player in top_captains.iterrows():
+            team_id = player['team']
+            # Find next fixture for the player's team
+            next_fixture = upcoming_fixtures[
+                (upcoming_fixtures['team_h'] == team_id) | (upcoming_fixtures['team_a'] == team_id)
+            ].iloc[0]
+            
+            if next_fixture['team_h'] == team_id:
+                opponent_id = next_fixture['team_a']
+                venue = 'H'
+            else:
+                opponent_id = next_fixture['team_h']
+                venue = 'A'
+            
+            opponent_short_name = team_short_name_lookup.get(opponent_id, '???')
+            next_opponents.append(f"{opponent_short_name} ({venue})")
+
+        top_captains['next_opponent'] = next_opponents
 
         # Build DataFrame with scoring factors as columns (include weights in column names)
         captain_data = {
             'Final Score': top_captains['captain_score'].round(1),
             'Player': top_captains['web_name'] + ' (' + top_captains['position'] + ')',
             'Team': top_captains['team_name'],
+            'Next Opponent': top_captains['next_opponent'],
             'Price': '£' + top_captains['price_display'].round(1).astype(str) + 'm',
             'Total Pts': top_captains['total_points'].astype(int),
             f'Points ({points_weight:.0%})': top_captains.get('points_score', 0).fillna(0).round(1),
@@ -1680,7 +1738,7 @@ def suggest_captain(
             f'Form ({form_weight:.0%})': top_captains.get('form_score', 0).fillna(0).round(1),
             'xGI': top_captains.get('expected_goal_involvements', 0).fillna(0).round(2),
             f'Attack ({attacking_weight:.0%})': top_captains.get('xgi_score', 0).fillna(0).round(1),
-            'Fix Diff': top_captains.get('avg_fixture_difficulty_3', 3.0).fillna(3.0).round(1),
+            'Next Fix Diff': top_captains.get('next_fixture_difficulty', top_captains.get('avg_fixture_difficulty_3', 3.0)).fillna(3.0).round(1),
             f'Fixtures ({fixture_weight:.0%})': top_captains.get('fixture_score', 0).fillna(0).round(1),
             'Own%': top_captains.get('selected_by_percent', 0).fillna(0).round(1)
         }
@@ -1708,13 +1766,13 @@ def suggest_captain(
 - **Points ({points_weight:.0%})**: Season total points contribution to final score
 - **Form ({form_weight:.0%})**: Recent 5-game form contribution to final score
 - **Attack ({attacking_weight:.0%})**: Expected goal involvements (xGI) contribution to final score
-- **Fixtures ({fixture_weight:.0%})**: Fixture difficulty bonus contribution to final score"""
+- **Fixtures ({fixture_weight:.0%})**: Next fixture difficulty bonus contribution to final score"""
 
         if consider_early_season and history_weight > 0:
             result += f"\n- **History ({history_weight:.0%})**: Previous season performance bonus"
 
         result += f"""
-- **Fix Diff**: Next 3 fixtures difficulty (1=easy, 5=hard)
+- **Next Fix Diff**: Next fixture difficulty (1=easy, 5=hard)
 - **Own%**: Current ownership percentage"""
 
         return result

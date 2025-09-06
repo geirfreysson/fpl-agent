@@ -2,7 +2,7 @@ import pytest
 import os
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from tools import get_easiest_fixtures, get_players_by_price_range, search_players, get_player_form, get_player_photos, find_player_replacements
+from tools import get_easiest_fixtures, get_players_by_price_range, search_players, get_player_form, get_player_photos, find_player_replacements, suggest_captain
 
 
 def test_get_easiest_fixtures_with_real_data():
@@ -985,6 +985,67 @@ def test_find_player_replacements_edge_cases():
         os.chdir(original_dir)
 
 
+def test_find_player_replacements_bowen():
+    """Test find_player_replacements specifically for Bowen to find forward with good form"""
+    
+    original_dir = os.getcwd()
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(project_root)
+    
+    try:
+        # Define key attributes for finding Bowen replacements
+        # Bowen is actually a forward (FWD) priced around 7-8m
+        key_attributes = {
+            "position": "forward",
+            "min_price": 6.0,
+            "max_price": 9.0,
+            "min_total_points": 10,  # Reasonable minimum for active players  
+            "min_form": 2.0,         # Good form threshold
+            "min_minutes": 100       # Ensure regular playing time
+        }
+        
+        result = find_player_replacements('Bowen', key_attributes, max_suggestions=5)
+        
+        assert isinstance(result, str)
+        assert "Bowen" in result
+        assert not result.startswith("Error finding player replacements:")
+        
+        # Handle case where no replacements found vs successful analysis
+        if "No suitable replacements found" in result:
+            # This should be rare with our reasonable criteria, but acceptable
+            assert "criteria" in result.lower()
+        else:
+            # Should contain replacement analysis
+            assert "replacement" in result.lower()
+            
+            # Check for forward indicators
+            lines = result.split('\n')
+            has_forward_info = any("FWD" in line for line in lines)
+            assert has_forward_info, "Should indicate forward position"
+            
+            # Verify replacements have form data and scoring
+            form_indicators = ['form', 'Form', 'pts', 'points']
+            has_form_data = any(
+                any(indicator.lower() in line.lower() for indicator in form_indicators)
+                for line in lines
+            )
+            assert has_form_data, "Should contain form and scoring data for replacements"
+            
+            # Check for player information structure
+            has_player_names = any(
+                len(line.strip()) > 0 and any(char.isalpha() for char in line)
+                for line in lines
+            )
+            assert has_player_names, "Should contain player names"
+            
+            # Check for price information (£ symbol)
+            has_price_info = any('£' in line for line in lines)
+            assert has_price_info, "Should contain price information"
+    
+    finally:
+        os.chdir(original_dir)
+
+
 # ========== COMPREHENSIVE SEARCH_PLAYERS TESTS ==========
 
 def test_search_players_basic_functionality():
@@ -1579,3 +1640,110 @@ def test_player_replacement_salah():
         }
     result = find_player_replacements(params)
     print(result)
+
+
+def test_suggest_captain_basic():
+    """Test suggest_captain with default parameters"""
+    
+    original_dir = os.getcwd()
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(project_root)
+    
+    try:
+        result = suggest_captain()
+        
+        assert isinstance(result, str)
+        assert len(result) > 0
+        assert not result.startswith("Error")
+        
+        # Should contain captain-related content
+        assert "captain" in result.lower()
+        
+        # Handle case where no suitable candidates are found (valid response)
+        if "No suitable captain candidates found" in result:
+            assert "criteria" in result  # Should explain why no candidates found
+        else:
+            # If candidates are found, check format
+            lines = result.strip().split('\n')
+            captain_lines = [line for line in lines if line.strip() and ('🎯' in line or line.strip().startswith(('1.', '2.', '3.', '4.', '5.')))]
+            assert len(captain_lines) >= 1, f"Should have captain suggestions but got: {result}"
+            
+            # Should contain player names and relevant stats
+            assert any('£' in line for line in lines), "Should contain player prices"
+        
+    finally:
+        os.chdir(original_dir)
+
+
+def test_suggest_captain_custom_limit():
+    """Test suggest_captain with custom limit"""
+    
+    original_dir = os.getcwd()
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(project_root)
+    
+    try:
+        result = suggest_captain(limit=3)
+        
+        assert isinstance(result, str)
+        assert not result.startswith("Error")
+        assert "Captain" in result or "captain" in result
+        
+        # Should have at most 3 captain suggestions
+        lines = result.strip().split('\n')
+        captain_lines = [line for line in lines if line.strip() and ('🎯' in line or line.strip().startswith(('1.', '2.', '3.')))]
+        assert len(captain_lines) <= 3, f"Should have max 3 suggestions but got {len(captain_lines)}"
+        
+    finally:
+        os.chdir(original_dir)
+
+
+def test_suggest_captain_output_format():
+    """Test suggest_captain output format consistency"""
+    
+    original_dir = os.getcwd()
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(project_root)
+    
+    try:
+        result = suggest_captain(limit=2)
+        
+        lines = result.strip().split('\n')
+        
+        # Should have a header mentioning captaincy
+        header_found = any('captain' in line.lower() for line in lines[:3])
+        assert header_found, f"Should have captain header in first few lines: {lines[:3]}"
+        
+        # Check for the table header row
+        header_row = None
+        for line in lines:
+            if "Final Score" in line and "Player" in line and "Next Opponent" in line:
+                header_row = line
+                break
+        assert header_row is not None, "Output table header not found or is missing columns"
+
+        # Find the index of the Next Opponent column
+        headers = [h.strip() for h in header_row.split('|')]
+        try:
+            opponent_col_index = headers.index("Next Opponent")
+        except ValueError:
+            assert False, "'Next Opponent' column not found in the output table header"
+
+        # Check for player information with proper format
+        player_info_found = False
+        for line in lines:
+            if any(indicator in line for indicator in ['£', 'pts', 'form', '🎯']):
+                player_info_found = True
+                # Check opponent format if this is a player line
+                if '|' in line:
+                    cols = [c.strip() for c in line.split('|')]
+                    if len(cols) > opponent_col_index:
+                        opponent_str = cols[opponent_col_index]
+                        # Regex to check for 3 capital letters, a space, and (H) or (A)
+                        import re
+                        assert re.match(r'[A-Z]{3} \([HA]\)', opponent_str), f"Next Opponent format is incorrect: {opponent_str}"
+
+        assert player_info_found, f"Should contain player stats/info: {result}"
+        
+    finally:
+        os.chdir(original_dir)

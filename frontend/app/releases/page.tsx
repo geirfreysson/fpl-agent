@@ -3,7 +3,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import Link from "next/link";
 import { Calendar, Star, ArrowLeft } from "lucide-react";
-import releases from "@/data/releases.json";
+import releases from "@/data/releases";
 
 export default function ReleasesPage() {
   const sortedReleases = Object.entries(releases.releases)
@@ -49,6 +49,7 @@ export default function ReleasesPage() {
           {sortedReleases.map((release, index) => (
             <div
               key={release.version}
+              id={`release-${release.version}`}
               className="bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden hover:shadow-xl transition-shadow duration-300"
             >
               <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 px-6 py-4">
@@ -71,13 +72,16 @@ export default function ReleasesPage() {
                 </div>
                 <div className="flex items-center gap-2 mt-2">
                   <Calendar className="w-4 h-4 text-emerald-100" />
-                  <span className="text-emerald-100 text-sm">
+                  <a 
+                    href={`#release-${release.version}`}
+                    className="text-emerald-100 text-sm hover:text-white hover:underline transition-colors"
+                  >
                     {new Date(release.date).toLocaleDateString("en-US", {
                       year: "numeric",
                       month: "long",
                       day: "numeric",
                     })}
-                  </span>
+                  </a>
                 </div>
               </div>
 
@@ -103,7 +107,7 @@ export default function ReleasesPage() {
                       ),
                       li: ({ children }) => (
                         <li className="flex items-start gap-2">
-                          <span className="text-emerald-500 mt-1.5">•</span>
+                          <span className="text-emerald-500 mt-0.5" style={{ position: "relative", bottom: "0.1rem" }}>•</span>
                           <span>{children}</span>
                         </li>
                       ),
@@ -111,6 +115,38 @@ export default function ReleasesPage() {
                         <p className="text-slate-600 leading-relaxed mb-3">
                           {children}
                         </p>
+                      ),
+                      table: ({ children }) => (
+                        <div className="overflow-x-auto my-4">
+                          <table className="w-full bg-white rounded-lg border border-slate-200">
+                            {children}
+                          </table>
+                        </div>
+                      ),
+                      thead: ({ children }) => (
+                        <thead className="bg-slate-50">
+                          {children}
+                        </thead>
+                      ),
+                      tbody: ({ children }) => (
+                        <tbody>
+                          {children}
+                        </tbody>
+                      ),
+                      tr: ({ children }) => (
+                        <tr className="border-b border-slate-100 last:border-b-0">
+                          {children}
+                        </tr>
+                      ),
+                      th: ({ children }) => (
+                        <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">
+                          {children}
+                        </th>
+                      ),
+                      td: ({ children }) => (
+                        <td className="px-4 py-3 text-sm text-slate-600">
+                          {children}
+                        </td>
                       ),
                     }}
                   >

@@ -146,6 +146,7 @@ def add_derived_features(df, fixtures_df=None, teams_data=None):
         teams_lookup = {team['id']: team['name'] for team in teams_data}
         
         # Initialize fixture difficulty columns
+        df['next_fixture_difficulty'] = None
         df['avg_fixture_difficulty_3'] = None
         df['avg_fixture_difficulty_5'] = None
         df['avg_fixture_difficulty_10'] = None
@@ -161,10 +162,12 @@ def add_derived_features(df, fixtures_df=None, teams_data=None):
             team_mask = df['team'] == team_id
             
             # Calculate different fixture windows
+            next_1, _, _ = calculate_fixture_difficulty(team_id, fixtures_df, teams_lookup, 1)
             avg_3, _, _ = calculate_fixture_difficulty(team_id, fixtures_df, teams_lookup, 3)
             avg_5, home_5, away_5 = calculate_fixture_difficulty(team_id, fixtures_df, teams_lookup, 5)
             avg_10, _, _ = calculate_fixture_difficulty(team_id, fixtures_df, teams_lookup, 10)
             
+            df.loc[team_mask, 'next_fixture_difficulty'] = next_1
             df.loc[team_mask, 'avg_fixture_difficulty_3'] = avg_3
             df.loc[team_mask, 'avg_fixture_difficulty_5'] = avg_5
             df.loc[team_mask, 'avg_fixture_difficulty_10'] = avg_10
@@ -280,7 +283,7 @@ def process_elements_data():
     
     # Show sample of new features
     new_features = ['price_millions', 'points_per_million', 'form_per_million', 'goals_overperformance', 
-                   'transfer_momentum', 'avg_fixture_difficulty_5', 'points_rank_in_position']
+                   'transfer_momentum', 'next_fixture_difficulty', 'avg_fixture_difficulty_5', 'points_rank_in_position']
     available_features = [f for f in new_features if f in df.columns]
     if available_features:
         print(f"\nSample of new features: {available_features}")

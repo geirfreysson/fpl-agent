@@ -4,8 +4,13 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fastapi.testclient import TestClient
-from api import app
+from api import app, get_current_user
 
+# Override authentication for testing
+def override_get_current_user():
+    return {"sub": "test_user", "session_id": "test_session"}
+
+app.dependency_overrides[get_current_user] = override_get_current_user
 client = TestClient(app)
 
 
