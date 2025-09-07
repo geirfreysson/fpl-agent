@@ -1,11 +1,14 @@
 "use client";
 
 import { useEffect, useCallback, useRef } from 'react';
+import { useThread } from '@assistant-ui/react';
 import { generateTableImage, shareToTwitter, downloadImage, copyImageToClipboard } from '@/lib/table-share';
 
-// Hook that safely adds share functionality without DOM manipulation conflicts
+// Hook that adds share buttons after streaming completes
 export function useTableShare() {
-  const processedTables = useRef(new Set<HTMLTableElement>());
+  const thread = useThread();
+  const wasRunning = useRef(false);
+  const processedMessages = useRef(new Set<string>());
   const cleanupFunctions = useRef(new Set<() => void>());
 
   const shareTable = useCallback(async (tableElement: HTMLTableElement, type: 'twitter' | 'download' | 'copy') => {
@@ -42,22 +45,14 @@ export function useTableShare() {
     }
   }, []);
 
-  const addShareButtons = useCallback((table: HTMLTableElement) => {
-    // Multiple checks to prevent duplicates
-    if (processedTables.current.has(table)) {
-      return;
-    }
-
+  const addShareButtonsToTable = useCallback((table: HTMLTableElement) => {
     // Check if buttons already exist after this table
     const nextSibling = table.nextElementSibling;
     if (nextSibling && nextSibling.classList.contains('table-share-buttons')) {
-      processedTables.current.add(table); // Mark as processed to avoid future checks
       return;
     }
 
     try {
-      processedTables.current.add(table);
-      
       // Create share buttons container that gets inserted AFTER the table
       const shareContainer = document.createElement('div');
       shareContainer.className = 'table-share-buttons flex gap-2 mt-2 mb-4 text-sm';
@@ -83,82 +78,79 @@ export function useTableShare() {
         shareContainer.appendChild(button);
       });
 
-      // Double-check no buttons exist before inserting
-      if (!table.nextElementSibling?.classList.contains('table-share-buttons')) {
-        // Insert after the table using insertAdjacentElement (safer than parent manipulation)
-        table.insertAdjacentElement('afterend', shareContainer);
+      // Insert after the table using insertAdjacentElement (safer than parent manipulation)
+      table.insertAdjacentElement('afterend', shareContainer);
 
-        // Store cleanup function
-        const cleanup = () => {
-          try {
-            if (shareContainer.parentNode) {
-              shareContainer.parentNode.removeChild(shareContainer);
-            }
-          } catch (error) {
-            console.warn('Failed to cleanup share container:', error);
+      // Store cleanup function
+      const cleanup = () => {
+        try {
+          if (shareContainer.parentNode) {
+            shareContainer.parentNode.removeChild(shareContainer);
           }
-        };
-        cleanupFunctions.current.add(cleanup);
-      }
+        } catch (error) {
+          console.warn('Failed to cleanup share container:', error);
+        }
+      };
+      cleanupFunctions.current.add(cleanup);
 
     } catch (error) {
       console.error('Failed to add share buttons:', error);
     }
   }, [shareTable]);
 
-  useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
-    let checkCount = 0;
-    const maxChecks = 30; // Stop after 30 seconds to prevent infinite checking
-    
-    const checkForTables = () => {
-      try {
-        // More specific selector to avoid processing the same table multiple times
-        const tables = document.querySelectorAll('table:not([data-share-processed])');
-        
-        tables.forEach((table) => {
-          const tableElement = table as HTMLTableElement;
-          if (tableElement.isConnected && !processedTables.current.has(tableElement)) {
-            // Mark immediately to prevent duplicate processing
-            tableElement.setAttribute('data-share-processed', 'true');
-            addShareButtons(tableElement);
-          }
-        });
-
-        checkCount++;
-        // Continue checking for streaming content, but with limits
-        if (checkCount < maxChecks) {
-          timeoutId = setTimeout(checkForTables, 1000);
-        }
-      } catch (error) {
-        console.error('Error checking for tables:', error);
-      }
-    };
-
-    // Initial check
-    checkForTables();
-
-    // Also set up a one-time check after a short delay for immediate content
-    const immediateCheck = setTimeout(() => {
-      const tables = document.querySelectorAll('table:not([data-share-processed])');
-      tables.forEach((table) => {
+  const processNewTables = useCallback(() => {
+    try {
+      // Find all tables that haven't been processed yet
+      const unprocessedTables = document.querySelectorAll('table:not([data-share-processed])');
+      console.log(`Found ${unprocessedTables.length} unprocessed tables`);
+      
+      if (unprocessedTables.length === 0) return;
+      
+      // Process each table
+      unprocessedTables.forEach((table) => {
         const tableElement = table as HTMLTableElement;
-        if (tableElement.isConnected && !processedTables.current.has(tableElement)) {
+        if (tableElement.isConnected) {
+          console.log('Adding share buttons to table');
           tableElement.setAttribute('data-share-processed', 'true');
-          addShareButtons(tableElement);
+          addShareButtonsToTable(tableElement);
         }
       });
-    }, 100);
+      
+    } catch (error) {
+      console.error('Error processing new tables:', error);
+    }
+  }, [addShareButtonsToTable]);
+
+  // Stream completion detection
+  useEffect(() => {
+    // When streaming stops (isRunning goes from true to false), process new tables
+    if (wasRunning.current && !thread.isRunning) {
+      console.log('Stream completed, processing tables...');
+      // Small delay to ensure DOM is fully updated
+      setTimeout(() => {
+        processNewTables();
+      }, 100);
+    }
+    
+    // Update the running state
+    wasRunning.current = thread.isRunning;
+  }, [thread.isRunning, processNewTables]);
+
+  // Initial check for existing tables when component mounts
+  useEffect(() => {
+    // Check for existing tables when the hook first mounts
+    const initialCheck = setTimeout(() => {
+      processNewTables();
+    }, 500);
 
     return () => {
-      clearTimeout(timeoutId);
-      clearTimeout(immediateCheck);
+      clearTimeout(initialCheck);
       // Cleanup all share button containers
       cleanupFunctions.current.forEach(cleanup => cleanup());
       cleanupFunctions.current.clear();
-      processedTables.current.clear();
+      processedMessages.current.clear();
     };
-  }, [addShareButtons]);
+  }, [processNewTables]);
 
   return { shareTable };
 }
