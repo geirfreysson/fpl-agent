@@ -86,12 +86,12 @@ export const Assistant = () => {
             <div className="flex items-center gap-2">
               <Image 
                 src="/assets/logo.svg" 
-                alt="FPL Agent Logo" 
+                alt="FPL With Robots Logo" 
                 width={32} 
                 height={32}
                 className="w-8 h-8"
               />
-              <h1 className="text-xl font-semibold text-foreground">FPL Agent</h1>
+              <h1 className="text-xl font-semibold text-foreground">FPL With Robots</h1>
             </div>
             <div className="text-sm text-muted-foreground hidden sm:block">
               Your Fantasy Premier League AI Assistant

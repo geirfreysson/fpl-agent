@@ -1,9 +1,25 @@
 export default {
-  currentVersion: 3,
+  currentVersion: 4,
   releases: {
+    "4": {
+      title: "Buttons to share your research",
+      date: "2024-09-07", 
+      content: `## New Features
+
+- Share all tables on X/Twitter
+- Download image of table
+- Copy image of table
+
+## Share research
+All tables now have Share, Download, and Copy options under all tables.
+`
+    },
+
+
+
     "3": {
       title: "New captain selection algorithm",
-      date: "2025-01-09",
+      date: "2025-09-01",
       content: `## New Features
 
 - Enhanced captain selection algorithm with weighted scoring system
@@ -39,8 +55,8 @@ Players must be outfield (not GK), £6.0m+, and 60+ minutes played to qualify as
 `
     },
     "2": {
-      title: "Release 2", 
-      date: "2024-12-15",
+      title: "Add fixture information to replacement suggestion", 
+      date: "2025-08-15",
       content: `## New Features
 
 - Added transfer suggestions based on upcoming fixtures
@@ -52,8 +68,8 @@ Players must be outfield (not GK), £6.0m+, and 60+ minutes played to qualify as
 - Better error handling`
     },
     "1": {
-      title: "Release 1",
-      date: "2024-11-20", 
+      title: "Launch FPL With Robots",
+      date: "2024-07-27", 
       content: `## Initial Release
 
 - Basic FPL agent functionality

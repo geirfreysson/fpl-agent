@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "FPL Agent - AI Assistant",
+  title: "FPL With Robots - AI Assistant",
   description: "Your Fantasy Premier League AI Assistant",
   icons: {
     icon: [

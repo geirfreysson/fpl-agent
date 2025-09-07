@@ -15,7 +15,7 @@ def help() -> str:
         String with comprehensive guide on available features and example queries
     """
     help_text = """
-🏆 **FPL AGENT HELP GUIDE** 🏆
+🏆 **FPL WITH ROBOTS HELP GUIDE** 🏆
 
 With our enhanced data features, you can ask sophisticated FPL questions! Here are some examples:
 

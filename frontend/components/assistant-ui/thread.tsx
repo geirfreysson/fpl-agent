@@ -8,6 +8,7 @@ import {
 } from "@assistant-ui/react";
 import type { FC } from "react";
 import { useRef, useEffect } from "react";
+import { useTableShare } from "@/hooks/use-table-share";
 import {
   ArrowDownIcon,
   CheckIcon,
@@ -30,6 +31,9 @@ export const Thread: FC = () => {
   // const runtime = useAssistantRuntime();
   const thread = useThread();
   const hasMessages = thread.messages.length > 0;
+  
+  // Add table share functionality
+  useTableShare();
 
   useEffect(() => {
     const scrollToBottom = () => {

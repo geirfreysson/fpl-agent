@@ -31,9 +31,7 @@ export default function ReleasesPage() {
             <h1 className="text-4xl font-bold text-slate-900">Releases</h1>
           </div>
           <p className="text-lg text-slate-600 leading-relaxed max-w-2xl mx-auto">
-            Stay up to date with the latest features, improvements, and bug
-            fixes in your Fantasy Premier League AI Assistant. Read more about
-            FPL With Robots <a href="https://geirfreysson.com/index.html#category=FPL" className="underline hover:no-underline">here</a>. Give{" "}
+            See below for features and bug fixes being added to FPL With Robots. Read more <a href="https://geirfreysson.com/index.html#category=FPL" className="underline hover:no-underline">on my blog</a>. Give{" "}
             <a 
               href="https://docs.google.com/forms/d/e/1FAIpQLSf9VXR3PickYikDJDWmwyNqb7WlhewPZykDLGutBYzUWGSLvA/viewform?usp=header"
               className="underline hover:no-underline"
