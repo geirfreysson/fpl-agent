@@ -6,6 +6,22 @@ interface ShareOptions {
   description?: string;
 }
 
+// Safe DOM element removal helper
+function safeRemoveChild(parent: Node, child: Node): boolean {
+  try {
+    if (child.parentNode === parent) {
+      parent.removeChild(child);
+      return true;
+    } else if (child.parentNode) {
+      child.parentNode.removeChild(child);
+      return true;
+    }
+  } catch (error) {
+    console.warn('Failed to remove DOM element:', error);
+  }
+  return false;
+}
+
 export async function generateTableImage({ element, title, description }: ShareOptions): Promise<Blob> {
   return new Promise((resolve, reject) => {
     // Create an isolated iframe to avoid CSS conflicts
@@ -129,7 +145,7 @@ export async function generateTableImage({ element, title, description }: ShareO
             });
             
             canvas.toBlob((blob) => {
-              document.body.removeChild(iframe);
+              safeRemoveChild(document.body, iframe);
               if (blob) {
                 resolve(blob);
               } else {
@@ -137,19 +153,19 @@ export async function generateTableImage({ element, title, description }: ShareO
               }
             }, 'image/png', 0.9);
           } catch (error) {
-            document.body.removeChild(iframe);
+            safeRemoveChild(document.body, iframe);
             reject(error);
           }
         }, 500);
         
       } catch (error) {
-        document.body.removeChild(iframe);
+        safeRemoveChild(document.body, iframe);
         reject(error);
       }
     };
     
     iframe.onerror = () => {
-      document.body.removeChild(iframe);
+      safeRemoveChild(document.body, iframe);
       reject(new Error('Failed to load iframe'));
     };
     
@@ -189,10 +205,18 @@ export async function downloadImage(blob: Blob, filename: string = 'table-share.
   const link = document.createElement('a');
   link.href = url;
   link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  
+  try {
+    document.body.appendChild(link);
+    link.click();
+    safeRemoveChild(document.body, link);
+  } catch (error) {
+    console.warn('Failed to handle download link:', error);
+    // Try to remove the link even if there was an error
+    safeRemoveChild(document.body, link);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
 export async function copyImageToClipboard(blob: Blob) {

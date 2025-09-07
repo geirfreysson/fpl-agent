@@ -63,7 +63,10 @@ export function useTableShare() {
           const twitterBtn = createShareButton('Share', 'text-gray-600 hover:bg-gray-50', '𝕏', async () => {
             try {
               // Verify table still exists before processing
-              if (!tableElement.isConnected) return;
+              if (!tableElement.isConnected || !tableElement.parentNode) {
+                console.warn('Table no longer connected to DOM, skipping share');
+                return;
+              }
               
               const imageBlob = await generateTableImage({
                 element: tableElement,
@@ -73,6 +76,7 @@ export function useTableShare() {
               await shareToTwitter(imageBlob, getTableTitle(tableElement) || "AI FPL analysis!! 🤖");
             } catch (error) {
               console.error('Failed to share to Twitter:', error);
+              // Don't throw, just log and continue
             }
           });
           
@@ -80,7 +84,10 @@ export function useTableShare() {
           const downloadBtn = createShareButton('Download', 'text-gray-600 hover:bg-gray-50', '💾', async () => {
             try {
               // Verify table still exists before processing
-              if (!tableElement.isConnected) return;
+              if (!tableElement.isConnected || !tableElement.parentNode) {
+                console.warn('Table no longer connected to DOM, skipping download');
+                return;
+              }
               
               const imageBlob = await generateTableImage({
                 element: tableElement,
@@ -90,6 +97,7 @@ export function useTableShare() {
               await downloadImage(imageBlob, 'fpl-table.png');
             } catch (error) {
               console.error('Failed to download:', error);
+              // Don't throw, just log and continue
             }
           });
           
@@ -97,7 +105,10 @@ export function useTableShare() {
           const copyBtn = createShareButton('Copy', 'text-gray-600 hover:bg-gray-50', '📋', async () => {
             try {
               // Verify table still exists before processing
-              if (!tableElement.isConnected) return;
+              if (!tableElement.isConnected || !tableElement.parentNode) {
+                console.warn('Table no longer connected to DOM, skipping copy');
+                return;
+              }
               
               const imageBlob = await generateTableImage({
                 element: tableElement,
@@ -110,14 +121,25 @@ export function useTableShare() {
               }
             } catch (error) {
               console.error('Failed to copy:', error);
+              // Don't throw, just log and continue
             }
           });
           
-          shareButtons.appendChild(twitterBtn);
-          shareButtons.appendChild(downloadBtn);
-          shareButtons.appendChild(copyBtn);
-          shareContainer.appendChild(shareButtons);
-          wrapper.appendChild(shareContainer);
+          try {
+            shareButtons.appendChild(twitterBtn);
+            shareButtons.appendChild(downloadBtn);
+            shareButtons.appendChild(copyBtn);
+            shareContainer.appendChild(shareButtons);
+            
+            // Verify wrapper is still connected before adding
+            if (wrapper.isConnected && wrapper.parentNode) {
+              wrapper.appendChild(shareContainer);
+            } else {
+              console.warn('Wrapper no longer connected, skipping share container');
+            }
+          } catch (error) {
+            console.error('Failed to add share buttons to container:', error);
+          }
         } catch (error) {
           console.error('Failed to add share buttons to table:', error);
         }
