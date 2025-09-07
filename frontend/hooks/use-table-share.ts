@@ -43,7 +43,15 @@ export function useTableShare() {
   }, []);
 
   const addShareButtons = useCallback((table: HTMLTableElement) => {
+    // Multiple checks to prevent duplicates
     if (processedTables.current.has(table)) {
+      return;
+    }
+
+    // Check if buttons already exist after this table
+    const nextSibling = table.nextElementSibling;
+    if (nextSibling && nextSibling.classList.contains('table-share-buttons')) {
+      processedTables.current.add(table); // Mark as processed to avoid future checks
       return;
     }
 
@@ -54,6 +62,7 @@ export function useTableShare() {
       const shareContainer = document.createElement('div');
       shareContainer.className = 'table-share-buttons flex gap-2 mt-2 mb-4 text-sm';
       shareContainer.style.cssText = 'opacity: 0.8; transition: opacity 0.2s;';
+      shareContainer.setAttribute('data-table-id', `table-${Date.now()}-${Math.random()}`);
       
       // Create buttons
       const buttons = [
@@ -74,20 +83,23 @@ export function useTableShare() {
         shareContainer.appendChild(button);
       });
 
-      // Insert after the table using insertAdjacentElement (safer than parent manipulation)
-      table.insertAdjacentElement('afterend', shareContainer);
+      // Double-check no buttons exist before inserting
+      if (!table.nextElementSibling?.classList.contains('table-share-buttons')) {
+        // Insert after the table using insertAdjacentElement (safer than parent manipulation)
+        table.insertAdjacentElement('afterend', shareContainer);
 
-      // Store cleanup function
-      const cleanup = () => {
-        try {
-          if (shareContainer.parentNode) {
-            shareContainer.parentNode.removeChild(shareContainer);
+        // Store cleanup function
+        const cleanup = () => {
+          try {
+            if (shareContainer.parentNode) {
+              shareContainer.parentNode.removeChild(shareContainer);
+            }
+          } catch (error) {
+            console.warn('Failed to cleanup share container:', error);
           }
-        } catch (error) {
-          console.warn('Failed to cleanup share container:', error);
-        }
-      };
-      cleanupFunctions.current.add(cleanup);
+        };
+        cleanupFunctions.current.add(cleanup);
+      }
 
     } catch (error) {
       console.error('Failed to add share buttons:', error);
@@ -96,31 +108,51 @@ export function useTableShare() {
 
   useEffect(() => {
     let timeoutId: NodeJS.Timeout;
+    let checkCount = 0;
+    const maxChecks = 30; // Stop after 30 seconds to prevent infinite checking
     
     const checkForTables = () => {
       try {
+        // More specific selector to avoid processing the same table multiple times
         const tables = document.querySelectorAll('table:not([data-share-processed])');
         
         tables.forEach((table) => {
           const tableElement = table as HTMLTableElement;
           if (tableElement.isConnected && !processedTables.current.has(tableElement)) {
+            // Mark immediately to prevent duplicate processing
             tableElement.setAttribute('data-share-processed', 'true');
             addShareButtons(tableElement);
           }
         });
+
+        checkCount++;
+        // Continue checking for streaming content, but with limits
+        if (checkCount < maxChecks) {
+          timeoutId = setTimeout(checkForTables, 1000);
+        }
       } catch (error) {
         console.error('Error checking for tables:', error);
       }
-      
-      // Check again after a delay for streaming content
-      timeoutId = setTimeout(checkForTables, 1000);
     };
 
     // Initial check
     checkForTables();
 
+    // Also set up a one-time check after a short delay for immediate content
+    const immediateCheck = setTimeout(() => {
+      const tables = document.querySelectorAll('table:not([data-share-processed])');
+      tables.forEach((table) => {
+        const tableElement = table as HTMLTableElement;
+        if (tableElement.isConnected && !processedTables.current.has(tableElement)) {
+          tableElement.setAttribute('data-share-processed', 'true');
+          addShareButtons(tableElement);
+        }
+      });
+    }, 100);
+
     return () => {
       clearTimeout(timeoutId);
+      clearTimeout(immediateCheck);
       // Cleanup all share button containers
       cleanupFunctions.current.forEach(cleanup => cleanup());
       cleanupFunctions.current.clear();
