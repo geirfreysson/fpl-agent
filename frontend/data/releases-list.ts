@@ -1,6 +1,19 @@
 export default {
-  currentVersion: 4,
+  currentVersion: 5,
   releases: {
+    "5": {
+      title: "Team fixtures",
+      date: "2024-20-10", 
+      content: `## New Features
+
+- Team fixtures tool to accurately get upcoming fixtures for any team or list all of them.
+
+
+### Example prompt:
+
+> Show me the difficulty rating for all the teams for the next 5 games. List them in order, easiest to hardest.
+`
+    },
     "4": {
       title: "Buttons to share your research",
       date: "2024-09-07", 

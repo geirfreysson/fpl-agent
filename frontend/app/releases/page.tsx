@@ -2,7 +2,7 @@ import React from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import Link from "next/link";
-import { Calendar, Star, ArrowLeft } from "lucide-react";
+import { Calendar, Star, ArrowLeft, Quote } from "lucide-react";
 import releases from "@/data/releases-list";
 
 export default function ReleasesPage() {
@@ -145,6 +145,14 @@ export default function ReleasesPage() {
                         <td className="px-4 py-3 text-sm text-slate-600">
                           {children}
                         </td>
+                      ),
+                      blockquote: ({ children }) => (
+                        <blockquote className="relative my-6 pl-12 pr-6 py-4 border-l-4 border-emerald-500 rounded-r-lg">
+                          <Quote className="absolute top-4 left-3 w-5 h-5 text-emerald-400 opacity-50" />
+                          <div className="text-slate-700 italic font-medium leading-relaxed">
+                            {children}
+                          </div>
+                        </blockquote>
                       ),
                     }}
                   >
