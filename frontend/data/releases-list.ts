@@ -3,7 +3,7 @@ export default {
   releases: {
     "5": {
       title: "Team fixtures",
-      date: "2024-20-10", 
+      date: "2024-10-20", 
       content: `## New Features
 
 - Team fixtures tool to accurately get upcoming fixtures for any team or list all of them.
