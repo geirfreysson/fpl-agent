@@ -226,6 +226,7 @@ const Composer: FC = () => {
         rows={1}
         autoFocus
         placeholder="Write a message..."
+        autoComplete="off"
         className="placeholder:text-muted-foreground max-h-40 flex-grow resize-none border-none bg-transparent px-2 py-4 outline-none focus:ring-0 disabled:cursor-not-allowed"
         style={{ fontSize: '16px' }}
       />
@@ -296,7 +297,10 @@ const UserActionBar: FC = () => {
 const EditComposer: FC = () => {
   return (
     <ComposerPrimitive.Root className="bg-muted my-4 flex w-full max-w-[var(--thread-max-width)] flex-col gap-2 rounded-xl">
-      <ComposerPrimitive.Input className="text-foreground flex h-8 w-full resize-none bg-transparent p-4 pb-0 outline-none" />
+      <ComposerPrimitive.Input
+        autoComplete="off"
+        className="text-foreground flex h-8 w-full resize-none bg-transparent p-4 pb-0 outline-none"
+      />
 
       <div className="mx-3 mb-3 flex items-center justify-center gap-2 self-end">
         <ComposerPrimitive.Cancel asChild>
