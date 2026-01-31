@@ -1,6 +1,35 @@
 export default {
-  currentVersion: 5,
+  currentVersion: 6,
   releases: {
+    "6": {
+      title: "XG Form Analysis - 30-Day Rolling Metrics",
+      date: "2026-01-31",
+      content: `## New Features
+
+- **30-Day xG Form Metrics**: Track player performance using rolling 30-day averages for expected goals (xG), expected assists (xA), and expected goal involvements (xGI)
+- **Expanded Player Coverage**: Increased detailed player data from 50 to 150 top players
+- **Smart Filtering**: New filter parameters for xG form analysis with match count context
+
+## XG Form Metrics
+
+The agent now calculates rolling 30-day averages based on actual match dates (not gameweeks), providing more accurate short-term form indicators:
+
+- **xG Form**: Average expected goals per match over the last 30 days - identifies players in good underlying form
+- **xA Form**: Average expected assists per match over the last 30 days - indicates creative output potential
+- **xGI Form**: Average expected goal involvements per match over the last 30 days - best overall attacking threat indicator
+- **Matches Last 30 Days**: Number of matches played for context and filtering
+
+## Example Queries
+
+> Show me players with highest xGI form over the last 30 days
+
+> Find midfielders with xG form > 0.5 but low actual goals (due for returns)
+
+> Which forwards have the best xG form with at least 4 matches played?
+
+> Compare players' xG form to their season xG totals
+`
+    },
     "5": {
       title: "Team fixtures",
       date: "2024-10-20", 
