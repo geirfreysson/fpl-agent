@@ -15,6 +15,7 @@ jobs:
       uses: actions/checkout@v4
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0
 
     - name: Setup Python
       uses: actions/setup-python@v4
@@ -26,6 +27,9 @@ jobs:
 
     - name: Install dependencies
       run: uv sync
+
+    - name: Sync with remote
+      run: git pull --rebase origin ${{ github.ref_name }}
 
     - name: Run FPL data collector
       run: uv run python fpl_data/fpl_data_collector.py
@@ -48,7 +52,6 @@ jobs:
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
-        git pull --rebase origin ${{ github.ref_name }}
         git add fpl_data/fpl_data/
         git commit -m "Update FPL data - $(date +'%Y-%m-%d %H:%M UTC')"
         git push
