@@ -36,7 +36,7 @@ jobs:
     - name: Check for changes
       id: check_changes
       run: |
-        git add fpl_data/fpl_data/*.parquet
+        git add fpl_data/fpl_data/
         if git diff --cached --quiet; then
           echo "changes=false" >> $GITHUB_OUTPUT
         else
@@ -48,6 +48,7 @@ jobs:
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
-        git commit -m "Update FPL data - $(date +'%Y-%m-%d %H:%M UTC')"
         git pull --rebase origin ${{ github.ref_name }}
+        git add fpl_data/fpl_data/
+        git commit -m "Update FPL data - $(date +'%Y-%m-%d %H:%M UTC')"
         git push
