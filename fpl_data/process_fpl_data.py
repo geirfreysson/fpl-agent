@@ -11,6 +11,7 @@ import json
 import pandas as pd
 import numpy as np
 from pathlib import Path
+from datetime import datetime, timedelta, timezone
 
 
 def calculate_fixture_difficulty(team_id, fixtures_df, teams_lookup, num_fixtures=5):
@@ -51,7 +52,58 @@ def calculate_fixture_difficulty(team_id, fixtures_df, teams_lookup, num_fixture
         return None, None, None
 
 
-def add_derived_features(df, fixtures_df=None, teams_data=None):
+def calculate_xg_form_metrics(player_history_df, current_date=None):
+    """
+    Calculate 30-day rolling averages for xG, xA, and xGI.
+
+    Args:
+        player_history_df: DataFrame with player_history data
+        current_date: Reference date (defaults to now UTC)
+
+    Returns:
+        DataFrame with columns: player_id, xg_form_30d, xa_form_30d,
+                                xgi_form_30d, matches_last_30d
+    """
+    # Set default current date if not provided
+    if current_date is None:
+        current_date = datetime.now(timezone.utc)
+
+    # Calculate cutoff date (30 days ago)
+    cutoff_date = current_date - timedelta(days=30)
+
+    # Create a copy to avoid modifying original
+    df = player_history_df.copy()
+
+    # Convert xG columns from string to float64
+    xg_cols = ['expected_goals', 'expected_assists', 'expected_goal_involvements']
+    for col in xg_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+
+    # Parse kickoff_time to timezone-aware datetime
+    df['kickoff_time'] = pd.to_datetime(df['kickoff_time'], errors='coerce', utc=True)
+
+    # Filter to matches in last 30 days
+    recent_matches = df[df['kickoff_time'] >= cutoff_date].copy()
+
+    # Group by player_id and calculate metrics
+    if recent_matches.empty:
+        # Return empty DataFrame with correct structure
+        return pd.DataFrame(columns=['player_id', 'xg_form_30d', 'xa_form_30d',
+                                    'xgi_form_30d', 'matches_last_30d'])
+
+    # Calculate aggregates
+    xg_form = recent_matches.groupby('player_id').agg(
+        xg_form_30d=('expected_goals', 'mean'),
+        xa_form_30d=('expected_assists', 'mean'),
+        xgi_form_30d=('expected_goal_involvements', 'mean'),
+        matches_last_30d=('expected_goals', 'count')  # Count matches using any column
+    ).reset_index()
+
+    return xg_form
+
+
+def add_derived_features(df, fixtures_df=None, teams_data=None, player_history_df=None):
     """
     Add comprehensive derived features for FPL analysis.
     """
@@ -98,7 +150,21 @@ def add_derived_features(df, fixtures_df=None, teams_data=None):
     # Use NaN instead of 1 for players with no expected stats
     df['goals_luck_factor'] = np.where(df['expected_goals'] > 0, df['goals_scored'] / df['expected_goals'], np.nan)
     df['assists_luck_factor'] = np.where(df['expected_assists'] > 0, df['assists'] / df['expected_assists'], np.nan)
-    
+
+    # === XG FORM METRICS (30-DAY ROLLING) ===
+    if player_history_df is not None:
+        print("Calculating xG form metrics (30-day rolling averages)...")
+        xg_form = calculate_xg_form_metrics(player_history_df)
+        df = df.merge(xg_form, left_on='id', right_on='player_id', how='left')
+
+        # Remove duplicate player_id column if created
+        if 'player_id' in df.columns and 'player_id' != 'id':
+            df = df.drop(columns=['player_id'])
+
+        # Log coverage
+        players_with_xg_form = df['xg_form_30d'].notna().sum()
+        print(f"  - xG form calculated for {players_with_xg_form}/{len(df)} players")
+
     # === CONSISTENCY METRICS ===
     # Form consistency (based on form vs points_per_game)
     # Clamp between 0 and 1 to prevent negative consistency scores
@@ -266,9 +332,18 @@ def process_elements_data():
     if fixtures_file.exists():
         print("Loading fixtures data for difficulty calculation...")
         fixtures_df = pd.read_parquet(fixtures_file)
-    
-    # Add derived features
-    df = add_derived_features(df, fixtures_df, teams_data)
+
+    # Load player history data if available for xG form calculation
+    player_history_df = None
+    player_history_file = Path("fpl_data/fpl_data/player_history.parquet")
+    if player_history_file.exists():
+        print("Loading player history data for xG form calculation...")
+        player_history_df = pd.read_parquet(player_history_file)
+    else:
+        print("Warning: player_history.parquet not found - xG form metrics will be skipped")
+
+    # Add derived features (pass player_history_df)
+    df = add_derived_features(df, fixtures_df, teams_data, player_history_df)
     
     # Create output directory if it doesn't exist
     output_file.parent.mkdir(parents=True, exist_ok=True)

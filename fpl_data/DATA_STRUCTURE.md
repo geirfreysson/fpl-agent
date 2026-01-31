@@ -26,9 +26,9 @@ fpl_data/
 
 ## 1. elements.parquet
 
-**Source**: `bootstrap_static.json` → `elements` section  
-**Records**: 663 players  
-**Columns**: 97 columns  
+**Source**: `bootstrap_static.json` → `elements` section
+**Records**: 663 players
+**Columns**: 142 columns (including 4 new xG form metrics)  
 
 ### Key Columns
 
@@ -139,6 +139,41 @@ Forward-looking metrics based on upcoming fixture difficulty:
 - **`avg_fixture_difficulty_10`** (float): Average difficulty of next 10 fixtures.
 - **`home_fixture_difficulty_5`** (float): Average difficulty of next 5 home fixtures.
 - **`away_fixture_difficulty_5`** (float): Average difficulty of next 5 away fixtures.
+
+#### Expected Goals Form (30-Day Rolling)
+Rolling averages calculated from matches in the last 30 calendar days:
+
+- **`xg_form_30d`** (float64): Average expected goals per match (last 30 days).
+  NaN if no matches in period. Identifies players in good underlying form.
+
+- **`xa_form_30d`** (float64): Average expected assists per match (last 30 days).
+  NaN if no matches in period. Indicates creative output potential.
+
+- **`xgi_form_30d`** (float64): Average expected goal involvements per match (last 30 days).
+  Sum of xG + xA. Best overall indicator of attacking threat.
+
+- **`matches_last_30d`** (int64): Number of matches played in last 30 days.
+  Provides context for reliability. Recommend filtering for >= 3 matches for meaningful analysis.
+
+**Usage Examples**:
+```python
+# Find in-form attackers
+search_players(
+    min_xgi_form_30d=0.6,
+    min_matches_last_30d=3,
+    sort_by="xgi_form_30d"
+)
+
+# Identify "due for returns" (high xG form, low actual goals)
+search_players(
+    min_xg_form_30d=0.4,
+    max_goals_scored=2,
+    min_matches_last_30d=4
+)
+
+# Compare xG form to season totals
+players[['web_name', 'xg_form_30d', 'expected_goals', 'goals_scored']]
+```
 
 #### Position Rankings
 Rank within position group (1 = best in position):

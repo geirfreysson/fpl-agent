@@ -67,6 +67,12 @@ With our enhanced data features, you can ask sophisticated FPL questions! Here a
 • **Clean Sheet Rate**: "Which keepers/defenders have the best clean sheet records?"
 • **Save Percentage**: "Find keepers with high save rates for bonus points"
 
+📊 **XG FORM ANALYSIS (30-DAY ROLLING)**
+• "Show me players with highest xGI form over the last 30 days"
+• "Find midfielders with xG form > 0.5 but low actual goals (due for returns)"
+• "Which forwards have the best xG form with at least 4 matches played?"
+• "Compare players' xG form to their season xG totals"
+
 💰 **BUDGET & STRATEGY PLANNING**
 • "Find the best value picks for a £100m budget"
 • "Show me premium players (£10m+) who justify their price"
@@ -484,6 +490,7 @@ def search_players(
     - POSITION SPECIFIC: min_save_percentage, max_save_percentage, min_clean_sheet_rate, max_clean_sheet_rate, min_attacking_threat, max_attacking_threat, min_defensive_value, max_defensive_value
     - PER 90 STATS: min_goals_per_90, max_goals_per_90, min_assists_per_90, max_assists_per_90, min_goal_involvements_per_90, max_goal_involvements_per_90
     - RANKINGS: min_points_rank_in_position, max_points_rank_in_position, min_value_rank_in_position, max_value_rank_in_position, min_form_rank_in_position, max_form_rank_in_position
+    - XG FORM (30-DAY): min_xg_form_30d, max_xg_form_30d, min_xa_form_30d, max_xa_form_30d, min_xgi_form_30d, max_xgi_form_30d, min_matches_last_30d, max_matches_last_30d
     - BOOLEAN FLAGS: is_penalty_taker, is_corner_taker, is_freekick_taker
     - CATEGORIES: ownership_category (Low/Medium/High/Template)
     - ICT INDEX: min_influence, max_influence, min_creativity, max_creativity, min_threat, max_threat, min_ict_index, max_ict_index

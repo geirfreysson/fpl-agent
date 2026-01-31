@@ -114,7 +114,7 @@ class FPLDataCollector:
             return True
         return False
     
-    def collect_player_summaries(self, limit: int = 50) -> bool:
+    def collect_player_summaries(self, limit: int = 150) -> bool:
         """Collect detailed player summaries (limited to avoid API overload)"""
         # Get bootstrap data to find player IDs
         bootstrap_file = self.data_dir / "bootstrap_static.json"

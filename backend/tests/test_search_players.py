@@ -363,6 +363,74 @@ class TestSearchPlayers:
         # Forwards should generally have higher attacking threat
         assert fwd_threat >= gk_threat, f"Forwards ({fwd_threat}) should have ≥ attacking threat than GKs ({gk_threat})"
 
+    def test_xg_form_filter(self):
+        """Test xG form filtering (30-day rolling average)"""
+        result = search_players(
+            limit=10,
+            filters={"min_xg_form_30d": 0.3},
+            sort_by="xg_form_30d",
+            ascending=False
+        )
+
+        # Should return results without error
+        assert isinstance(result, str), "Should return string result"
+
+        # If there are results, verify they're formatted correctly
+        if "No players found" not in result:
+            lines = result.split('\n')
+            player_lines = [line for line in lines if re.match(r'^\d+\.', line.strip())]
+            # Should have at least some players with xG form data
+            assert len(player_lines) > 0, "Should find players with xG form data"
+
+    def test_xg_form_sorting(self):
+        """Test sorting by xGI form (descending)"""
+        result = search_players(
+            limit=5,
+            sort_by="xgi_form_30d",
+            ascending=False
+        )
+
+        # Should return results without error
+        assert isinstance(result, str), "Should return string result"
+        assert not result.startswith("Error"), "Should not error when sorting by xGI form"
+
+        # Verify results are formatted
+        lines = result.split('\n')
+        player_lines = [line for line in lines if re.match(r'^\d+\.', line.strip())]
+
+        # Should have some players (even if many have NaN)
+        assert len(player_lines) > 0, "Should find players"
+
+    def test_xg_form_combined(self):
+        """Test xG form combined with position and price filters"""
+        result = search_players(
+            limit=8,
+            filters={
+                "position": "MID",
+                "max_price": 8.0,
+                "min_xg_form_30d": 0.4,
+                "min_matches_last_30d": 3
+            },
+            sort_by="xgi_form_30d",
+            ascending=False
+        )
+
+        # Should execute without error
+        assert isinstance(result, str), "Should return string result"
+
+        # If results found, verify they match criteria
+        if "No players found" not in result:
+            assert "MID" in result, "Should find midfielders"
+            lines = result.split('\n')
+            player_lines = [line for line in lines if re.match(r'^\d+\.', line.strip())]
+
+            # Verify price constraint
+            for line in player_lines:
+                price_match = re.search(r'£(\d+\.\d+)m', line)
+                if price_match:
+                    price = float(price_match.group(1))
+                    assert price <= 8.0, f"Player should be ≤£8.0m, got £{price}m"
+
 
 if __name__ == '__main__':
     # Run tests when executed directly
