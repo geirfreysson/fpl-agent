@@ -49,4 +49,5 @@ jobs:
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
         git commit -m "Update FPL data - $(date +'%Y-%m-%d %H:%M UTC')"
+        git pull --rebase origin ${{ github.ref_name }}
         git push
