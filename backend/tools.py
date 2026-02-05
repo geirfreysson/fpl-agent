@@ -4,7 +4,89 @@ import json
 import os
 import logging
 import traceback
+import re
+import requests
 from smolagents import tool
+from clerk_backend_api import Clerk
+
+CLERK_SECRET_KEY = os.getenv("CLERK_SECRET_KEY")
+FPL_METADATA_KEY = "fpl_entry_id"
+_CURRENT_USER_CONTEXT = {}
+
+
+def set_current_user(user: dict | None) -> None:
+    global _CURRENT_USER_CONTEXT
+    _CURRENT_USER_CONTEXT = user or {}
+
+
+def _get_current_user_id() -> str | None:
+    if not _CURRENT_USER_CONTEXT:
+        return None
+    return _CURRENT_USER_CONTEXT.get("sub") or _CURRENT_USER_CONTEXT.get("user_id")
+
+
+def _get_clerk_client() -> Clerk:
+    if not CLERK_SECRET_KEY:
+        raise RuntimeError("CLERK_SECRET_KEY not configured")
+    return Clerk(bearer_auth=CLERK_SECRET_KEY)
+
+
+def _get_user_private_metadata() -> dict:
+    user_id = _get_current_user_id()
+    if not user_id:
+        return {}
+    clerk_client = _get_clerk_client()
+    user = clerk_client.users.get(user_id=user_id)
+    if not user:
+        return {}
+    metadata = getattr(user, "private_metadata", None)
+    return metadata if isinstance(metadata, dict) else {}
+
+
+def _set_user_private_metadata(new_metadata: dict) -> None:
+    user_id = _get_current_user_id()
+    if not user_id:
+        raise RuntimeError("User not authenticated")
+    clerk_client = _get_clerk_client()
+    clerk_client.users.update(user_id=user_id, private_metadata=new_metadata)
+
+
+def _get_current_event_id() -> int | None:
+    response = requests.get(
+        "https://fantasy.premierleague.com/api/bootstrap-static/",
+        timeout=10
+    )
+    response.raise_for_status()
+    data = response.json()
+    events = data.get("events", [])
+    if not events:
+        return None
+    current_event = next((event for event in events if event.get("is_current")), None)
+    if not current_event:
+        current_event = next((event for event in events if event.get("is_next")), None)
+    if not current_event:
+        return events[-1].get("id")
+    return current_event.get("id")
+
+
+def _get_team_name(entry_id: int) -> str | None:
+    response = requests.get(
+        f"https://fantasy.premierleague.com/api/entry/{entry_id}/",
+        timeout=10
+    )
+    if response.status_code != 200:
+        return None
+    data = response.json()
+    return data.get("name")
+
+
+def _get_entry_picks(entry_id: int, event_id: int) -> dict:
+    response = requests.get(
+        f"https://fantasy.premierleague.com/api/entry/{entry_id}/event/{event_id}/picks/",
+        timeout=10
+    )
+    response.raise_for_status()
+    return response.json()
 
 @tool
 def help() -> str:
@@ -94,6 +176,7 @@ With our enhanced data features, you can ask sophisticated FPL questions! Here a
 
 🚀 **GET STARTED**
 Try asking: "Find me 3 midfielders under £8m with good value, easy fixtures, and positive transfer momentum"
+Try asking: "Advise me on my team" (if needed, reply with "My FPL ID is 1234567")
 
 Happy FPL managing! 🎯
 """
@@ -1819,3 +1902,309 @@ def suggest_captain(
         logging.error(f"Error in suggest_captain: {e}")
         logging.error(traceback.format_exc())
         return error_msg
+
+
+@tool
+def set_fpl_user_id(fpl_id: str) -> str:
+    """
+    Store the user's FPL entry ID in Clerk private metadata.
+
+    Args:
+        fpl_id: The user's FPL entry ID (digits). Can include text; we'll extract digits.
+    """
+    cleaned = re.sub(r"\D", "", str(fpl_id or ""))
+    if not cleaned:
+        return "Please provide a numeric FPL entry ID (for example: 1234567)."
+    if len(cleaned) < 5 or len(cleaned) > 10:
+        return "That doesn't look like a valid FPL entry ID. Please double-check and send it again."
+
+    user_id = _get_current_user_id()
+    if not user_id:
+        return "You're not signed in, so I can't save your FPL entry ID yet."
+
+    try:
+        metadata = _get_user_private_metadata()
+        updated_metadata = dict(metadata)
+        previous = updated_metadata.get(FPL_METADATA_KEY)
+        updated_metadata[FPL_METADATA_KEY] = int(cleaned)
+        _set_user_private_metadata(updated_metadata)
+        # Read back to confirm the write actually persisted in Clerk.
+        persisted = _get_user_private_metadata().get(FPL_METADATA_KEY)
+        if persisted != int(cleaned):
+            logging.error(
+                "Clerk metadata write did not persist for user %s. Expected %s, got %s",
+                user_id,
+                cleaned,
+                persisted,
+            )
+            return (
+                "I tried to save your FPL entry ID, but it didn't persist in Clerk. "
+                "Please confirm the backend is using the same Clerk instance as your dashboard "
+                "and that the request is authenticated for your user."
+            )
+    except Exception as e:
+        logging.error(f"Error saving FPL entry ID: {e}")
+        logging.error(traceback.format_exc())
+        return "I couldn't save your FPL entry ID due to a server error."
+
+    if previous and str(previous) == cleaned:
+        return f"Your FPL entry ID is already set to {cleaned}. I will use it when you ask for team advice."
+    return f"Saved your FPL entry ID as {cleaned}. Ask me to advise on your team anytime."
+
+
+@tool
+def analyse_current_team() -> str:
+    """
+    Analyze the current team for the authenticated user using their stored FPL entry ID.
+    Focus on form, xGI form, total points, and injuries, with a note on form dips.
+    """
+    user_id = _get_current_user_id()
+    if not user_id:
+        return "You're not signed in, so I can't access your saved FPL entry ID."
+
+    try:
+        metadata = _get_user_private_metadata()
+    except Exception as e:
+        logging.error(f"Error reading user metadata: {e}")
+        logging.error(traceback.format_exc())
+        return "I couldn't access your account metadata to find your FPL entry ID."
+
+    entry_id = metadata.get(FPL_METADATA_KEY)
+    if not entry_id:
+        return "I don't have your FPL entry ID yet. Reply with: \"My FPL ID is 1234567\" and I'll save it."
+
+    try:
+        entry_id = int(entry_id)
+    except (TypeError, ValueError):
+        return "Your saved FPL entry ID looks invalid. Please resend it (digits only)."
+
+    try:
+        event_id = _get_current_event_id()
+    except Exception as e:
+        logging.error(f"Error fetching current gameweek: {e}")
+        logging.error(traceback.format_exc())
+        return "I couldn't determine the current gameweek from FPL."
+
+    if not event_id:
+        return "I couldn't determine the current gameweek from FPL."
+
+    try:
+        picks_data = _get_entry_picks(entry_id, event_id)
+    except requests.HTTPError as e:
+        status = e.response.status_code if e.response is not None else None
+        if status == 404:
+            return f"I couldn't find a team with entry ID {entry_id}. Please double-check it."
+        if status == 403:
+            return "That team appears to be private. Please check your FPL privacy settings."
+        return "I couldn't fetch your team picks from FPL right now."
+    except Exception as e:
+        logging.error(f"Error fetching entry picks: {e}")
+        logging.error(traceback.format_exc())
+        return "I couldn't fetch your team picks from FPL right now."
+
+    picks = picks_data.get("picks", [])
+    if not picks:
+        return "I couldn't find any picks for your team this gameweek."
+
+    team_name = None
+    try:
+        team_name = _get_team_name(entry_id)
+    except Exception:
+        team_name = None
+
+    picks_df = pd.DataFrame(picks)
+    if picks_df.empty or "element" not in picks_df.columns:
+        return "I couldn't parse your team picks from FPL."
+
+    picks_df = picks_df.rename(columns={"element": "id", "position": "pick_position"})
+
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    project_root = os.path.dirname(current_dir)
+    elements_path = os.path.join(project_root, "fpl_data", "fpl_data", "elements.parquet")
+    teams_path = os.path.join(project_root, "fpl_data", "fpl_data", "teams.json")
+
+    try:
+        players_df = pd.read_parquet(
+            elements_path,
+            columns=[
+                "id",
+                "web_name",
+                "first_name",
+                "second_name",
+                "element_type",
+                "team",
+                "now_cost",
+                "form",
+                "points_per_game",
+                "total_points",
+                "status",
+                "chance_of_playing_next_round",
+                "news",
+                "xgi_form_30d",
+                "matches_last_30d",
+            ],
+        )
+    except Exception as e:
+        logging.error(f"Error loading player data: {e}")
+        logging.error(traceback.format_exc())
+        return "I couldn't load player data to analyze your team."
+
+    try:
+        with open(teams_path, "r") as f:
+            teams_data = json.load(f)
+    except Exception as e:
+        logging.error(f"Error loading teams data: {e}")
+        logging.error(traceback.format_exc())
+        return "I couldn't load teams data to analyze your team."
+
+    team_lookup = {team["id"]: team.get("short_name", team.get("name", "UNK")) for team in teams_data}
+
+    team_df = picks_df.merge(players_df, on="id", how="left")
+
+    if "element_type" not in team_df.columns:
+        # Defensive fallback in case the selected parquet columns didn't include element_type.
+        try:
+            element_types_df = pd.read_parquet(elements_path, columns=["id", "element_type"])
+            team_df = team_df.merge(element_types_df, on="id", how="left", suffixes=("", "_et"))
+            if "element_type" not in team_df.columns and "element_type_et" in team_df.columns:
+                team_df["element_type"] = team_df["element_type_et"]
+                team_df = team_df.drop(columns=["element_type_et"])
+        except Exception as e:
+            logging.error(f"Error loading element type data: {e}")
+            logging.error(traceback.format_exc())
+            return "I couldn't load player position data to analyze your team."
+
+    if "element_type" not in team_df.columns:
+        return "I couldn't load player position data to analyze your team."
+
+    position_map = {1: "GK", 2: "DEF", 3: "MID", 4: "FWD"}
+    team_df["pos"] = team_df["element_type"].map(position_map).fillna("?")
+    team_df["team_short"] = team_df["team"].map(team_lookup).fillna("UNK")
+    team_df["form"] = pd.to_numeric(team_df["form"], errors="coerce")
+    team_df["points_per_game"] = pd.to_numeric(team_df["points_per_game"], errors="coerce")
+    team_df["xgi_form_30d"] = pd.to_numeric(team_df["xgi_form_30d"], errors="coerce")
+    team_df["matches_last_30d"] = pd.to_numeric(team_df["matches_last_30d"], errors="coerce")
+
+    team_df["role"] = team_df["pick_position"].apply(lambda pos: "XI" if pos <= 11 else "Bench")
+    if "is_captain" in team_df.columns:
+        captain_mask = team_df["is_captain"] == True
+        team_df.loc[captain_mask, "role"] = team_df.loc[captain_mask, "role"] + " (C)"
+    if "is_vice_captain" in team_df.columns:
+        vice_mask = team_df["is_vice_captain"] == True
+        team_df.loc[vice_mask, "role"] = team_df.loc[vice_mask, "role"] + " (VC)"
+
+    status_map = {
+        "a": "Available",
+        "d": "Doubtful",
+        "i": "Injured",
+        "n": "Not Available",
+        "s": "Suspended",
+        "u": "Unavailable",
+    }
+
+    def format_status(row: pd.Series) -> str:
+        status = status_map.get(row.get("status", "a"), "Unknown")
+        chance = row.get("chance_of_playing_next_round")
+        if pd.notna(chance):
+            try:
+                status = f"{status} ({int(chance)}%)"
+            except Exception:
+                pass
+        return status
+
+    team_df["status_label"] = team_df.apply(format_status, axis=1)
+
+    team_df["form_display"] = team_df["form"].round(1)
+    team_df["xgi_display"] = team_df.apply(
+        lambda row: (
+            f"{row['xgi_form_30d']:.2f} ({int(row['matches_last_30d'])})"
+            if pd.notna(row["xgi_form_30d"]) and pd.notna(row["matches_last_30d"])
+            else "n/a"
+        ),
+        axis=1,
+    )
+
+    team_df["price_display"] = (team_df["now_cost"] / 10).round(1)
+
+    summary_df = team_df[team_df["pick_position"] <= 11].copy()
+    avg_form = summary_df["form"].mean()
+    avg_xgi = summary_df["xgi_form_30d"].mean()
+    total_points_sum = summary_df["total_points"].sum()
+    flagged = team_df[
+        (team_df["status"].fillna("a") != "a")
+        | (team_df["chance_of_playing_next_round"].fillna(100) < 75)
+    ]
+
+    summary_table = pd.DataFrame(
+        [
+            ["Entry", f"{team_name or 'Unknown'} (ID {entry_id})"],
+            ["Gameweek", f"{event_id}"],
+            ["Avg Form (XI)", f"{avg_form:.2f}" if pd.notna(avg_form) else "n/a"],
+            ["Avg xGI Form 30d (XI)", f"{avg_xgi:.2f}" if pd.notna(avg_xgi) else "n/a"],
+            ["Total Points (XI sum)", f"{int(total_points_sum)}"],
+            ["Flags (all players)", f"{len(flagged)}"],
+        ],
+        columns=["Metric", "Value"],
+    )
+
+    team_df = team_df.sort_values("pick_position")
+    team_table = team_df[
+        [
+            "web_name",
+            "pos",
+            "team_short",
+            "role",
+            "form_display",
+            "xgi_display",
+            "total_points",
+            "status_label",
+        ]
+    ].rename(
+        columns={
+            "web_name": "Player",
+            "pos": "Pos",
+            "team_short": "Team",
+            "role": "Role",
+            "form_display": "Form (5)",
+            "xgi_display": "xGI Form 30d (matches)",
+            "total_points": "Total Pts",
+            "status_label": "Status",
+        }
+    )
+
+    dip_df = team_df[team_df["pick_position"] <= 11].copy()
+    dip_df["form_delta"] = dip_df["form"] - dip_df["points_per_game"]
+    dip_df = dip_df[
+        dip_df["form"].notna()
+        & dip_df["points_per_game"].notna()
+        & (dip_df["form_delta"] <= -1.0)
+    ]
+
+    result = f"## Current Team Summary (GW {event_id})\n\n{summary_table.to_markdown(index=False)}"
+    result += f"\n\n## Team Form and Underlying (all players)\n\n{team_table.to_markdown(index=False)}"
+
+    if not dip_df.empty:
+        dip_table = dip_df[["web_name", "form", "points_per_game", "form_delta"]].rename(
+            columns={
+                "web_name": "Player",
+                "form": "Form (5)",
+                "points_per_game": "PPG (season)",
+                "form_delta": "Form - PPG",
+            }
+        )
+        dip_table["Form (5)"] = dip_table["Form (5)"].round(1)
+        dip_table["PPG (season)"] = dip_table["PPG (season)"].round(2)
+        dip_table["Form - PPG"] = dip_table["Form - PPG"].round(2)
+        result += f"\n\n## Form Dips vs Season PPG (XI)\n\n{dip_table.to_markdown(index=False)}"
+
+    if not flagged.empty:
+        flags_table = flagged[["web_name", "status_label", "news"]].rename(
+            columns={
+                "web_name": "Player",
+                "status_label": "Status",
+                "news": "News",
+            }
+        )
+        result += f"\n\n## Injury/Availability Flags\n\n{flags_table.to_markdown(index=False)}"
+
+    return result

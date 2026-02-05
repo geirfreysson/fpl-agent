@@ -1,6 +1,6 @@
 from smolagents import ToolCallingAgent, LiteLLMModel
 from smolagents.memory import TaskStep, ActionStep, SystemPromptStep, Timing
-from tools import help, get_weather, get_easiest_fixtures, get_players_by_price_range, search_players, get_player_form, get_player_fixtures, get_player_details, find_player_replacements, suggest_captain
+from tools import help, get_weather, get_easiest_fixtures, get_players_by_price_range, search_players, get_player_form, get_player_fixtures, get_player_details, find_player_replacements, suggest_captain, set_fpl_user_id, analyse_current_team
 from memory import convert_conversation_to_memory_steps
 import os
 from typing import List, Dict, Any
@@ -35,6 +35,11 @@ def create_agent(conversation_history: List[Dict[str, Any]] = None):
     - Differential: Player with low ownership
     - xG: Expected goals
     - xA: Expected assists
+
+    Team advice rules:
+    - If the user asks for advice on their team, squad, or "my team", call analyse_current_team.
+    - Only call set_fpl_user_id when the user explicitly provides their FPL entry ID (e.g., "My FPL ID is 1234567").
+    - Never invent or guess an entry ID. If it hasn't been provided, ask the user to share it.
     """
 
     agent = ToolCallingAgent(
@@ -44,6 +49,8 @@ def create_agent(conversation_history: List[Dict[str, Any]] = None):
                get_player_details, 
                find_player_replacements, 
                suggest_captain,
+               set_fpl_user_id,
+               analyse_current_team,
                get_easiest_fixtures,
                ],
         model=model,

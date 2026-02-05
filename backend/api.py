@@ -10,6 +10,7 @@ import logging
 import os
 import jwt
 import requests
+import tools as tools_module
 from agents import create_agent
 from clerk_backend_api import Clerk
 
@@ -144,6 +145,7 @@ async def chat_endpoint(
     
     def generate_response():
         try:
+            tools_module.set_current_user(user)
             # Create agent with streaming enabled and conversation history
             # Convert conversation_history to the format expected by create_agent
             history_for_agent = []
