@@ -223,7 +223,10 @@ async def chat_endpoint(
             
             # End of stream marker
             yield "d:\n"
-            
+
+        except GeneratorExit:
+            # Client disconnected, exit cleanly without yielding
+            return
         except Exception as e:
             error_msg = f"Error: {str(e)}"
             yield f"0:{json.dumps({'type': 'error', 'message': error_msg})}\n"

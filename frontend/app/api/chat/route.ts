@@ -68,20 +68,34 @@ export async function POST(req: Request) {
 
     // Create a transform stream to convert backend events to assistant-ui format
     const activeCalls = new Map(); // Track active tool calls
-    
+    let lineBuffer = ''; // Buffer for partial lines across chunks
+
     const transformStream = new TransformStream({
       transform(chunk, controller) {
         const decoder = new TextDecoder();
         const text = decoder.decode(chunk);
-        
+
+        // Prepend any buffered partial line from previous chunk
+        const data = lineBuffer + text;
+        lineBuffer = '';
+
         // Split by lines to handle multiple events in one chunk
-        const lines = text.split('\n');
-        
+        const lines = data.split('\n');
+
+        // Last element may be a partial line (if chunk didn't end with \n)
+        // Buffer it for the next chunk
+        if (!data.endsWith('\n')) {
+          lineBuffer = lines.pop() || '';
+        }
+
         for (const line of lines) {
-          if (line.startsWith('0:')) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+
+          if (trimmed.startsWith('0:')) {
             try {
-              const eventData = JSON.parse(line.slice(2));
-              
+              const eventData = JSON.parse(trimmed.slice(2));
+
               switch (eventData.type) {
                 case 'tool_call_start':
                   // Store tool call for later completion
@@ -91,7 +105,7 @@ export async function POST(req: Request) {
                   });
                   // Don't send anything yet, wait for completion
                   break;
-                  
+
                 case 'tool_call_complete':
                 case 'tool_call_final':
                   // Send complete tool call information as a single message part
@@ -103,38 +117,36 @@ export async function POST(req: Request) {
                       arguments: toolCall.arguments,
                       result: eventData.result
                     };
-                    
+
                     const specialText = `__TOOL_CALL__:${JSON.stringify(toolCallData)}`;
                     controller.enqueue(new TextEncoder().encode(`0:${JSON.stringify(specialText)}\n`));
-                    
-                    
+
                     activeCalls.delete(eventData.tool_call_id);
                   }
                   break;
-                  
+
                 case 'text':
                   // Forward text chunks directly
                   controller.enqueue(new TextEncoder().encode(`0:${JSON.stringify(eventData.content)}\n`));
                   break;
-                  
+
                 case 'final_answer':
                 case 'final_result':
                   // Skip final answer events - the text chunks already contain the streaming content
                   break;
-                  
+
                 default:
                   // Skip unknown event types
                   console.log('Unknown event type:', eventData.type);
                   break;
               }
             } catch (e) {
-              console.error('Failed to parse event:', line, e);
-              // Forward the line as-is if parsing fails
-              controller.enqueue(chunk);
+              console.error('Failed to parse event:', trimmed, e);
+              // Don't forward raw chunks - they'd corrupt the Data Stream Protocol
             }
-          } else if (line === 'd:') {
-            // Forward end-of-stream marker
-            controller.enqueue(new TextEncoder().encode('d:\n'));
+          } else if (trimmed === 'd:') {
+            // Forward end-of-stream marker with proper JSON value
+            controller.enqueue(new TextEncoder().encode(`d:{"finishReason":"stop"}\n`));
           }
         }
       }
@@ -159,7 +171,7 @@ export async function POST(req: Request) {
       start(controller) {
         const errorText = "I'm sorry, I encountered an error while processing your request. Please make sure the backend server is running.";
         controller.enqueue(new TextEncoder().encode(`0:${JSON.stringify(errorText)}\n`));
-        controller.enqueue(new TextEncoder().encode(`d:\n`));
+        controller.enqueue(new TextEncoder().encode(`d:{"finishReason":"stop"}\n`));
         controller.close();
       }
     });
